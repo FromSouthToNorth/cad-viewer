@@ -1,2 +1,5 @@
 # ZCode session data
 .zcode/
+
+# Local drawing files (DXF/DWG working data)
+cad/
