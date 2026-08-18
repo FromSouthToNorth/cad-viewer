@@ -1,0 +1,714 @@
+# @mlightcad/cad-viewer-example
+
+## 1.6.1
+
+### Patch Changes
+
+- feat: extends Design Review markup and measurement to the HTML viewer with sidecar persistence, aligned review icons, and HTML-only measure overlays that avoid forcing WebGL redraws. Also preserves absolute hatch colours when only lineweight is ByLayer, and documents GitMCP servers in the README and Cursor config
+- Updated dependencies
+  - @mlightcad/cad-agent-plugin@1.6.1
+  - @mlightcad/cad-html-plugin@1.6.1
+  - @mlightcad/cad-pdf-plugin@1.6.1
+  - @mlightcad/cad-simple-viewer@1.6.1
+  - @mlightcad/cad-viewer@1.6.1
+  - @mlightcad/three-renderer@1.6.1
+
+## 1.6.0
+
+### Minor Changes
+
+- feat: adds Design Review markup and measurement overlays with sidecar JSON persistence, undoable edits, draw-style controls, and AutoCAD-style REVCLOUD/SKETCH tools. Review overlays pick by stroke, support in-place text and window/crossing selection, and render on HTML canvas without forcing WebGL redraws. Ships a zero-build CDN bootstrap example, makes LibreDWG DWG support host opt-in, and retires cad-html-exporter-cli in favor of cad-simple-viewer-cli
+
+### Patch Changes
+
+- Updated dependencies
+  - @mlightcad/cad-agent-plugin@1.6.0
+  - @mlightcad/cad-html-plugin@1.6.0
+  - @mlightcad/cad-pdf-plugin@1.6.0
+  - @mlightcad/cad-simple-viewer@1.6.0
+  - @mlightcad/cad-viewer@1.6.0
+  - @mlightcad/three-renderer@1.6.0
+
+## 1.5.11
+
+### Patch Changes
+
+- feat: adds headless .scr script support to the simple-viewer CLI and waits for the scene to become idle before export so rendered output is complete. Example app bundles are split so data-model and three stay cacheable, isolating example chunks, and HTML runtime plugin options are fixed for more reliable offline HTML export workflows.
+- Updated dependencies
+  - @mlightcad/cad-agent-plugin@1.5.11
+  - @mlightcad/cad-html-plugin@1.5.11
+  - @mlightcad/cad-pdf-plugin@1.5.11
+  - @mlightcad/cad-simple-viewer@1.5.11
+  - @mlightcad/cad-viewer@1.5.11
+  - @mlightcad/three-renderer@1.5.11
+
+## 1.5.10
+
+### Patch Changes
+
+- feat: speeds up drawing open with progressive loading by default, a direct-batch convert fast path, and smarter rendering-cache heuristics that share compacted INSERT template geometry. Fonts load on demand during text draw, and picking is fixed so hollow lines are not selected via bbox while hatch islands stay selectable
+- Updated dependencies
+  - @mlightcad/cad-agent-plugin@1.5.10
+  - @mlightcad/cad-html-plugin@1.5.10
+  - @mlightcad/cad-pdf-plugin@1.5.10
+  - @mlightcad/cad-simple-viewer@1.5.10
+  - @mlightcad/cad-viewer@1.5.10
+
+## 1.5.9
+
+### Patch Changes
+
+- feat: this release adds Czech localization, an Attribute Definition dialog, and an About dialog; improves XREF overlays, XATTACH defaults, and INSERT Off/Freeze layer behavior; ships a faster DXF pipeline with compacted block templates; expands offline HTML locales (Czech, Turkish); and documents the proprietary DWG converter plus Read the Docs API publishing
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.5.9
+  - @mlightcad/cad-agent-plugin@1.5.9
+  - @mlightcad/cad-html-plugin@1.5.9
+  - @mlightcad/cad-pdf-plugin@1.5.9
+  - @mlightcad/cad-viewer@1.5.9
+
+## 1.5.8
+
+### Patch Changes
+
+- feat: expanded the CAD Viewer with Blocks, Layer Manager, Attribute Editor, Count, Memory, and Missing Resources palettes, plus -INSERT support, Xref overlays, overlay drawing support, and numerous rendering, interaction, and workflow improvements
+- Updated dependencies
+  - @mlightcad/cad-agent-plugin@1.5.8
+  - @mlightcad/cad-html-plugin@1.5.8
+  - @mlightcad/cad-pdf-plugin@1.5.8
+  - @mlightcad/cad-simple-viewer@1.5.8
+  - @mlightcad/cad-viewer@1.5.8
+
+## 1.5.7
+
+### Patch Changes
+
+- feat: added file open dialog, web worker readiness, collapsible toolbar UI, layer/entity refactors, undo/redo, GPU batch previews, and synchronization fixes
+- Updated dependencies
+  - @mlightcad/cad-html-plugin@1.5.7
+  - @mlightcad/cad-pdf-plugin@1.5.7
+  - @mlightcad/cad-simple-viewer@1.5.7
+  - @mlightcad/cad-viewer@1.5.7
+
+## 1.5.6
+
+### Patch Changes
+
+- feat: major update featuring grip point editing, proxy entity support, enhanced HTML export, AutoCAD-style command input, improved large-drawing rendering, SHAPE and dimension support, mobile usability enhancements, and extensive performance, rendering, and stability improvements
+- Updated dependencies
+  - @mlightcad/cad-html-plugin@1.5.6
+  - @mlightcad/cad-pdf-plugin@1.5.6
+  - @mlightcad/cad-simple-viewer@1.5.6
+  - @mlightcad/cad-viewer@1.5.6
+
+## 1.5.5
+
+### Patch Changes
+
+- chore: add version sync check and update deps
+- Updated dependencies
+  - @mlightcad/cad-html-plugin@1.5.5
+  - @mlightcad/cad-pdf-plugin@1.5.5
+  - @mlightcad/cad-simple-viewer@1.5.5
+  - @mlightcad/cad-viewer@1.5.5
+
+## 1.5.4
+
+### Patch Changes
+
+- feat: Text Style dialog, SHAPE rendering, batch visibility/HIDEOBJECTS, and font fallback/CDN; fix zoom-fit bounds, PNG export frustum, paper-space viewport detection, and dev startup deps; add demo links to README
+- Updated dependencies
+  - @mlightcad/cad-html-plugin@1.5.4
+  - @mlightcad/cad-pdf-plugin@1.5.4
+  - @mlightcad/cad-simple-viewer@1.5.4
+  - @mlightcad/cad-viewer@1.5.4
+
+## 1.5.3
+
+### Patch Changes
+
+- chore(deps): reclassify package dependencies and pin lodash-es via pnpm overrides
+- Updated dependencies
+  - @mlightcad/cad-html-plugin@1.5.3
+  - @mlightcad/cad-pdf-plugin@1.5.3
+  - @mlightcad/cad-simple-viewer@1.5.3
+  - @mlightcad/cad-viewer@1.5.3
+
+## 1.5.2
+
+### Patch Changes
+
+- feat: HTML/SVG export plugins, offline viewer enhancements, and ortho/polar tracking
+- Updated dependencies
+  - @mlightcad/cad-html-plugin@1.5.2
+  - @mlightcad/cad-pdf-plugin@1.5.2
+  - @mlightcad/cad-simple-viewer@1.5.2
+  - @mlightcad/cad-viewer@1.5.2
+
+## 1.5.1
+
+### Patch Changes
+
+- feat: adds offline HTML export (self-contained viewer, Playwright CLI, measurement, object snap, OrbitControls), MTEXT editing with ribbon integration and positioning fixes, the OFFSET command, and a Drawing Units (UNITS) dialog with LUNITS/AUNITS formatting. It improves paper-space layout switching, viewport picking, hatch rendering, and DXF/DWG load UX. Infrastructure updates include Node.js 24, pnpm 10, dependency upgrades, and production build/tree-shaking fixes
+- Updated dependencies
+  - @mlightcad/cad-html-exporter@1.5.1
+  - @mlightcad/cad-simple-viewer@1.5.1
+  - @mlightcad/cad-viewer@1.5.1
+
+## 1.5.0
+
+### Minor Changes
+
+- fix: upgrade dependencies to fix some position issues on rendering texts
+
+### Patch Changes
+
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.5.0
+  - @mlightcad/cad-viewer@1.6.0
+
+## 1.4.13
+
+### Patch Changes
+
+- feat: add commands polygon, ellipse, hatch, layer, move, qselect, and pngout
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.4.13
+  - @mlightcad/cad-viewer@1.4.13
+
+## 1.4.12
+
+### Patch Changes
+
+- fix: fix lots of bugs
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.4.12
+  - @mlightcad/cad-viewer@1.4.12
+
+## 1.4.11
+
+### Patch Changes
+
+- feat: add measurement feature
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.4.11
+  - @mlightcad/cad-viewer@1.4.11
+
+## 1.4.10
+
+### Patch Changes
+
+- feat: add line weight supports
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.4.10
+  - @mlightcad/cad-viewer@1.4.10
+
+## 1.4.9
+
+### Patch Changes
+
+- fix: fix issue 103 and update cad-simple-viewer-example to be able to verify it
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.4.9
+  - @mlightcad/cad-viewer@1.4.9
+
+## 1.4.8
+
+### Patch Changes
+
+- feat: support annotation
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.4.8
+  - @mlightcad/cad-viewer@1.4.8
+
+## 1.4.7
+
+### Patch Changes
+
+- fix: fix issues 89 and 90
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.4.7
+  - @mlightcad/cad-viewer@1.4.7
+
+## 1.4.6
+
+### Patch Changes
+
+- feat: support ATTDEF ATTRIB entities when reading DXF file
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.4.6
+  - @mlightcad/cad-viewer@1.4.6
+
+## 1.4.5
+
+### Patch Changes
+
+- fix: fix issues 79 andn 80
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.4.5
+  - @mlightcad/cad-viewer@1.4.5
+
+## 1.4.4
+
+### Patch Changes
+
+- fix: fix issues 64 and 73
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.4.4
+  - @mlightcad/cad-viewer@1.4.4
+
+## 1.4.3
+
+### Patch Changes
+
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.4.3
+  - @mlightcad/cad-viewer@1.4.3
+
+## 1.4.2
+
+### Patch Changes
+
+- feat: supports setting webworker javascript bundle urls in AcApDocManagerOptions
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.4.2
+  - @mlightcad/cad-viewer@1.4.2
+
+## 1.4.1
+
+### Patch Changes
+
+- feat: fix some issues on rendering linetype and hatch
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.4.1
+  - @mlightcad/cad-viewer@1.4.1
+
+## 1.4.0
+
+### Minor Changes
+
+- feat: support osnap for insert entity
+
+### Patch Changes
+
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.4.0
+  - @mlightcad/cad-viewer@1.6.0
+
+## 1.3.4
+
+### Patch Changes
+
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.3.4
+  - @mlightcad/cad-viewer@1.3.4
+
+## 1.3.3
+
+### Patch Changes
+
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.3.3
+  - @mlightcad/cad-viewer@1.3.3
+
+## 1.3.2
+
+### Patch Changes
+
+- fix: fix regression isssue on rendering block with wrong color
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.3.2
+  - @mlightcad/cad-viewer@1.3.2
+
+## 1.3.1
+
+### Patch Changes
+
+- feat: upgrade dependencies to fix issue on reading color from dwg file
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.3.1
+  - @mlightcad/cad-viewer@1.3.1
+
+## 1.3.0
+
+### Minor Changes
+
+- feat: support changing layer color
+
+### Patch Changes
+
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.3.0
+  - @mlightcad/cad-viewer@1.6.0
+
+## 1.2.5
+
+### Patch Changes
+
+- feat: refine input mangager and jig system
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.2.5
+  - @mlightcad/cad-viewer@1.2.5
+
+## 1.2.4
+
+### Patch Changes
+
+- fix: fix bundle size issue in lastest version of cad-simple-viewer
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.2.4
+  - @mlightcad/cad-viewer@1.2.4
+
+## 1.2.3
+
+### Patch Changes
+
+- fix: fix bugs on rendering polyline2d and polyline3d
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.2.3
+  - @mlightcad/cad-viewer@1.2.3
+
+## 1.2.2
+
+### Patch Changes
+
+- fix: fix bugs on rendering polyline2d, polyline3d, and linear dimension
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.2.2
+  - @mlightcad/cad-viewer@1.2.2
+
+## 1.2.1
+
+### Patch Changes
+
+- fix: fix bug on baseUrl
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.2.1
+  - @mlightcad/cad-viewer@1.2.1
+
+## 1.2.0
+
+### Minor Changes
+
+- feat: support dxf file with gbk encoding
+
+### Patch Changes
+
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.2.0
+  - @mlightcad/cad-viewer@1.6.0
+
+## 1.1.12
+
+### Patch Changes
+
+- feat: bump version to fix some bugs
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.1.12
+  - @mlightcad/cad-viewer@1.1.12
+
+## 1.1.11
+
+### Patch Changes
+
+- feat: upgrade dependencies version to fix some bugs
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.1.11
+  - @mlightcad/cad-viewer@1.1.11
+
+## 1.1.10
+
+### Patch Changes
+
+- fix: fix issue 74, 75, and 76
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.1.10
+  - @mlightcad/cad-viewer@1.1.10
+
+## 1.1.9
+
+### Patch Changes
+
+- Updated dependencies
+  - @mlightcad/cad-viewer@1.1.9
+  - @mlightcad/cad-simple-viewer@1.1.9
+
+## 1.1.8
+
+### Patch Changes
+
+- feat: fix bug on zoomToFit
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.1.8
+  - @mlightcad/cad-viewer@1.1.8
+
+## 1.1.7
+
+### Patch Changes
+
+- feat: show warning message if found some unknown entities after parsed drawing
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.1.7
+  - @mlightcad/cad-viewer@1.1.7
+
+## 1.1.6
+
+### Patch Changes
+
+- fix: upgrade dependencies to fix issue on parsing entity color when its color is byBlock
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.1.6
+  - @mlightcad/cad-viewer@1.1.6
+
+## 1.1.5
+
+### Patch Changes
+
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.1.5
+  - @mlightcad/cad-viewer@1.1.5
+
+## 1.1.4
+
+### Patch Changes
+
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.1.4
+  - @mlightcad/cad-viewer@1.1.4
+
+## 1.1.3
+
+### Patch Changes
+
+- fix: add logic to load default font back due to some bugs on rendering texts in blocks
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.1.3
+  - @mlightcad/cad-viewer@1.1.3
+
+## 1.1.2
+
+### Patch Changes
+
+- fix: fix regression issue #60
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.1.2
+  - @mlightcad/cad-viewer@1.1.2
+
+## 1.1.1
+
+### Patch Changes
+
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.1.1
+  - @mlightcad/cad-viewer@1.1.1
+
+## 1.1.0
+
+### Patch Changes
+
+- feat: simplify styles of cad-viewer component
+- Updated dependencies
+  - @mlightcad/cad-viewer@1.0.24
+  - @mlightcad/cad-simple-viewer@1.0.24
+
+## 1.0.23
+
+### Patch Changes
+
+- feat: remove property 'canvasId' and add property 'localFile' for cad-viewer component
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.0.23
+  - @mlightcad/cad-viewer@1.0.23
+
+## 1.0.22
+
+### Patch Changes
+
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.0.22
+  - @mlightcad/cad-viewer@1.0.22
+
+## 1.0.21
+
+### Patch Changes
+
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.0.21
+  - @mlightcad/cad-viewer@1.0.21
+
+## 1.0.20
+
+### Patch Changes
+
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.0.20
+  - @mlightcad/cad-viewer@1.0.20
+
+## 1.0.19
+
+### Patch Changes
+
+- feat: render mtexts in web worker
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.0.19
+  - @mlightcad/cad-viewer@1.0.19
+
+## 1.0.18
+
+### Patch Changes
+
+- feat: support batch append for entities
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.0.18
+  - @mlightcad/cad-viewer@1.0.18
+
+## 1.0.17
+
+### Patch Changes
+
+- fix: fix issue on opening one empty dxf/dwg file
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.0.17
+  - @mlightcad/cad-viewer@1.0.17
+
+## 1.0.16
+
+### Patch Changes
+
+- feat: add new property 'background' for component MlCadViewer
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.0.16
+  - @mlightcad/cad-viewer@1.0.16
+
+## 1.0.15
+
+### Patch Changes
+
+- feat: simplify usage of cad-simple-viewer and cad-viewer by using web worker
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.0.15
+  - @mlightcad/cad-viewer@1.0.15
+
+## 1.0.14
+
+### Patch Changes
+
+- feat: upgrade version of dependencies
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.0.14
+  - @mlightcad/cad-viewer@1.0.14
+
+## 1.0.13
+
+### Patch Changes
+
+- feat: use extents value from AcDbDatabase to zoom to extents
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.0.13
+  - @mlightcad/cad-viewer@1.0.13
+
+## 1.0.12
+
+### Patch Changes
+
+- fix: fix bug on getting tranlated entity name in order to show entity information when hovering on one entity
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.0.12
+  - @mlightcad/cad-viewer@1.0.12
+
+## 1.0.11
+
+### Patch Changes
+
+- fix: upgrade new version of dependencies to fix bugs on getting layer name and line type name
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.0.11
+  - @mlightcad/cad-viewer@1.0.11
+
+## 1.0.10
+
+### Patch Changes
+
+- fix: upgrade new version of libredwg-web and libredwg-converter to fix bugs on decoding texts
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.0.10
+  - @mlightcad/cad-viewer@1.0.10
+
+## 1.0.9
+
+### Patch Changes
+
+- fix: upgrade new version of libredwg-web and libredwg-converter to fix bugs on decoding texts
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.0.9
+  - @mlightcad/cad-viewer@1.0.9
+
+## 1.0.8
+
+### Patch Changes
+
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.0.8
+  - @mlightcad/cad-viewer@1.0.8
+
+## 1.0.7
+
+### Patch Changes
+
+- feat: upgrade realdwg-web to version 1.1.8 to fix some bugs
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.0.7
+  - @mlightcad/cad-viewer@1.0.7
+
+## 1.0.6
+
+### Patch Changes
+
+- feat: upgrade version of realdwg-web to fix some bugs
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.0.6
+  - @mlightcad/cad-viewer@1.0.6
+
+## 1.0.5
+
+### Patch Changes
+
+- fix: fix dependencies of cad-simple-viewer
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.0.5
+  - @mlightcad/cad-viewer@1.0.5
+
+## 1.0.4
+
+### Patch Changes
+
+- feat: add property 'canvasId' for MlCadViewer component and update its example and readme
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.0.4
+  - @mlightcad/cad-viewer@1.0.4
+
+## 1.0.3
+
+### Patch Changes
+
+- feat: upgrade version of data-model package to fix issue on refreshing multiple times when opening one drawing
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.0.3
+  - @mlightcad/cad-viewer@1.0.3
+
+## 1.0.2
+
+### Patch Changes
+
+- feat: refine MlCadViewer component by adding properties 'url' and 'wait'
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.0.2
+  - @mlightcad/cad-viewer@1.0.2
+
+## 1.0.1
+
+### Patch Changes
+
+- feat: removing logic to create one example drawing when launching viewer
+- Updated dependencies
+  - @mlightcad/cad-simple-viewer@1.0.1
+  - @mlightcad/cad-viewer@1.0.1

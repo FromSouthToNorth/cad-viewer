@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CAD Simple Viewer Example</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html {
+        height: 100%;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        background: #111827;
+        color: #e5e7eb;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+      }
+
+      .app-shell {
+        display: flex;
+        width: 100%;
+        height: 100%;
+        max-width: 100%;
+        min-height: 0;
+        overflow: hidden;
+      }
+
+      .file-sidebar-column {
+        flex: 0 0 auto;
+        display: flex;
+        flex-direction: row;
+        min-width: 0;
+        width: 180px;
+      }
+
+      .file-sidebar-column.is-hidden {
+        display: none;
+      }
+
+      .file-sidebar {
+        flex: 1 1 auto;
+        min-width: 0;
+        background: #0f172a;
+        border-right: none;
+        padding: 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.8rem;
+        overflow: auto;
+      }
+
+      .file-sidebar-resize-handle {
+        flex: 0 0 6px;
+        width: 6px;
+        cursor: ew-resize;
+        background: transparent;
+        touch-action: none;
+        border-right: 1px solid #1f2937;
+      }
+
+      .file-sidebar-resize-handle:hover,
+      .file-sidebar-resize-handle:active {
+        background: #374151;
+      }
+
+      .file-sidebar-toggle {
+        display: none;
+      }
+
+      .sidebar-title {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: #93c5fd;
+      }
+
+      .sidebar-help {
+        font-size: 0.82rem;
+        color: #9ca3af;
+        line-height: 1.4;
+        margin-bottom: 0.75rem;
+      }
+
+      .file-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+
+      .file-list-item {
+        width: 100%;
+        border: 1px solid #374151;
+        border-radius: 8px;
+        background: #1f2937;
+        color: #e5e7eb;
+        text-align: left;
+        padding: 0.65rem 0.7rem;
+        font-size: 0.88rem;
+        cursor: pointer;
+        transition: background 0.2s ease, border-color 0.2s ease;
+      }
+
+      .file-list-item:hover {
+        background: #273447;
+        border-color: #60a5fa;
+      }
+
+      .file-list-item.active {
+        border-color: #60a5fa;
+        background: #1d4f91;
+      }
+
+      .viewer-pane {
+        position: relative;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        min-height: 0;
+        overflow: hidden;
+        background: #111827;
+      }
+
+      .dev-toolbar {
+        flex: 0 0 auto;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.45rem 0.65rem;
+        border-bottom: 1px solid #374151;
+        background: #1f2937;
+      }
+
+      .dev-toolbar.is-disabled {
+        opacity: 0.55;
+      }
+
+      .dev-toolbar.is-disabled .dev-toolbar-primary {
+        opacity: 1;
+      }
+
+      .dev-toolbar button {
+        border: 1px solid #4b5563;
+        border-radius: 6px;
+        background: #111827;
+        color: #e5e7eb;
+        font-size: 0.82rem;
+        padding: 0.35rem 0.65rem;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+
+      .dev-toolbar button:hover:not(:disabled) {
+        border-color: #60a5fa;
+        background: #1d4f91;
+      }
+
+      .dev-toolbar button.is-active {
+        border-color: #60a5fa;
+        background: #2563eb;
+        color: #ffffff;
+      }
+
+      .dev-toolbar button:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+
+      .dev-toolbar-menu-wrap {
+        position: relative;
+        display: inline-flex;
+      }
+
+      .dev-toolbar-menu {
+        position: absolute;
+        z-index: 120;
+        top: calc(100% + 4px);
+        left: 0;
+        min-width: 220px;
+        padding: 0.5rem;
+        border: 1px solid #4b5563;
+        border-radius: 8px;
+        background: #111827;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+      }
+
+      .dev-toolbar-menu[hidden] {
+        display: none;
+      }
+
+      .dev-toolbar-menu-section + .dev-toolbar-menu-section {
+        margin-top: 0.55rem;
+        padding-top: 0.55rem;
+        border-top: 1px solid #374151;
+      }
+
+      .dev-toolbar-menu-label {
+        display: block;
+        margin-bottom: 0.35rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #9ca3af;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+      }
+
+      .dev-toolbar-menu-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.35rem;
+      }
+
+      .dev-toolbar-menu-actions button.is-selected {
+        border-color: #60a5fa;
+        background: #2563eb;
+        color: #ffffff;
+      }
+
+      .dev-toolbar-menu-toggle {
+        width: 100%;
+      }
+
+      .dev-toolbar-menu-field {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+      }
+
+      .dev-toolbar-menu-field input[type='number'] {
+        border: 1px solid #4b5563;
+        border-radius: 6px;
+        background: #111827;
+        color: #e5e7eb;
+        font-size: 0.82rem;
+        padding: 0.35rem 0.5rem;
+        width: 100%;
+      }
+
+      .dev-toolbar-menu-field input[type='number']:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+
+      .dev-toolbar-menu-field select {
+        border: 1px solid #4b5563;
+        border-radius: 6px;
+        background: #111827;
+        color: #e5e7eb;
+        font-size: 0.82rem;
+        padding: 0.35rem 0.5rem;
+        width: 100%;
+        cursor: pointer;
+      }
+
+      .dev-toolbar-menu-field select:hover:not(:disabled) {
+        border-color: #60a5fa;
+      }
+
+      .dev-toolbar-menu-field select:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+
+      .dev-toolbar-menu-check {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.82rem;
+        color: #e5e7eb;
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .dev-toolbar-menu-check input[type='checkbox'] {
+        width: 1rem;
+        height: 1rem;
+        accent-color: #2563eb;
+        cursor: pointer;
+      }
+
+      .dev-toolbar-menu-check input[type='checkbox']:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+
+      .demo-dock-tab-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        padding: 12px;
+        font-size: 12px;
+        color: var(--ml-ui-text, #e5e7eb);
+      }
+
+      .demo-dock-tab-header {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+      }
+
+      .demo-dock-tab-title {
+        margin: 0;
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: var(--ml-ui-text, #f3f4f6);
+      }
+
+      .demo-dock-tab-description {
+        margin: 0;
+        color: var(--ml-ui-text-muted, #9ca3af);
+        line-height: 1.45;
+      }
+
+      .demo-dock-tab-field {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+      }
+
+      .demo-dock-tab-field-inline {
+        flex-direction: row;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .demo-dock-tab-label {
+        font-size: 0.78rem;
+        font-weight: 500;
+        color: var(--ml-ui-text-muted, #9ca3af);
+      }
+
+      .demo-dock-tab-control {
+        border: 1px solid var(--ml-ui-border, #4b5563);
+        border-radius: 6px;
+        background: var(--ml-ui-bg, #111827);
+        color: var(--ml-ui-text, #e5e7eb);
+        font: inherit;
+        padding: 0.4rem 0.55rem;
+      }
+
+      .demo-dock-tab-control[type='checkbox'] {
+        width: 1rem;
+        height: 1rem;
+        padding: 0;
+      }
+
+      .demo-dock-tab-control[type='range'] {
+        padding: 0;
+        border: none;
+        background: transparent;
+      }
+
+      .demo-dock-tab-field:has(input[type='range']) {
+        position: relative;
+      }
+
+      .demo-dock-tab-range-value {
+        position: absolute;
+        right: 0;
+        top: 0;
+        font-size: 0.75rem;
+        color: var(--ml-ui-text-muted, #9ca3af);
+      }
+
+      .demo-dock-tab-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+
+      .demo-dock-tab-btn {
+        border: 1px solid var(--ml-ui-border, #4b5563);
+        border-radius: 6px;
+        background: var(--ml-ui-bg, #111827);
+        color: var(--ml-ui-text, #e5e7eb);
+        font-size: 0.82rem;
+        padding: 0.35rem 0.75rem;
+        cursor: pointer;
+      }
+
+      .demo-dock-tab-btn:hover {
+        border-color: var(--ml-ui-accent, #60a5fa);
+      }
+
+      .demo-dock-tab-btn-primary {
+        border-color: var(--ml-ui-accent, #2563eb);
+        background: var(--ml-ui-accent, #2563eb);
+        color: #ffffff;
+      }
+
+      .demo-dock-tab-btn-primary:hover {
+        filter: brightness(1.08);
+      }
+
+      .demo-dock-tab-status {
+        padding: 0.55rem 0.65rem;
+        border-radius: 6px;
+        border: 1px solid var(--ml-ui-border, #374151);
+        background: #1f2937;
+        color: var(--ml-ui-text-muted, #9ca3af);
+        line-height: 1.45;
+        word-break: break-word;
+      }
+
+      .viewer-canvas-area {
+        position: relative;
+        flex: 1;
+        min-height: 0;
+        min-width: 0;
+        overflow: hidden;
+      }
+
+      #cad-container {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+      }
+
+      #cad-container canvas {
+        display: block;
+        max-width: 100%;
+        max-height: 100%;
+      }
+
+      .empty-state {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 20;
+        pointer-events: none;
+      }
+
+      .empty-state.hidden {
+        display: none;
+      }
+
+      .open-main-button {
+        pointer-events: auto;
+        border: 1px solid #60a5fa;
+        background: #2563eb;
+        color: #ffffff;
+        border-radius: 10px;
+        padding: 0.7rem 1.2rem;
+        font-size: 0.95rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .open-main-button:hover {
+        background: #1d4ed8;
+      }
+
+      #fileInputElement {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-shell">
+      <div class="file-sidebar-column" id="fileSidebarColumn">
+      <aside class="file-sidebar" id="fileSidebar">
+        <h2 class="sidebar-title sidebar-title-desktop">Predefined Files</h2>
+        <button
+          type="button"
+          class="file-sidebar-toggle"
+          id="fileSidebarToggle"
+          aria-expanded="false"
+          aria-controls="fileSidebarBody"
+        >
+          <span class="file-sidebar-toggle-label">
+            <span class="sidebar-title">Predefined Files</span>
+            <span class="file-sidebar-toggle-subtitle" id="fileSidebarSubtitle">
+              Tap to browse sample files
+            </span>
+          </span>
+          <span class="file-sidebar-chevron" aria-hidden="true">&#x25BC;</span>
+        </button>
+        <div class="file-sidebar-body" id="fileSidebarBody">
+          <p class="sidebar-help">Select one file below or open a local DXF/DWG file.</p>
+          <div class="file-list" id="predefinedFileList">
+          <button
+            type="button"
+            class="file-list-item"
+            data-file-url="https://cdn.jsdelivr.net/gh/mlightcad/cad-data@main/data/canteen.dwg"
+          >
+            canteen.dwg
+          </button>
+          <button
+            type="button"
+            class="file-list-item"
+            data-file-url="https://cdn.jsdelivr.net/gh/mlightcad/cad-data@main/data/baseline-sample.dwg"
+          >
+            baseline-sample.dwg
+          </button>
+          <button
+            type="button"
+            class="file-list-item"
+            data-file-url="https://cdn.jsdelivr.net/gh/mlightcad/cad-data@main/data/hatch.dxf"
+          >
+            hatch.dxf
+          </button>
+          <button
+            type="button"
+            class="file-list-item"
+            data-file-url="https://cdn.jsdelivr.net/gh/mlightcad/cad-data@main/data/block-color.dxf"
+          >
+            block-color.dxf
+          </button>
+          <button
+            type="button"
+            class="file-list-item"
+            data-file-url="https://cdn.jsdelivr.net/gh/mlightcad/cad-data@main/data/lockers.dwg"
+          >
+            lockers.dwg
+          </button>
+          <button
+            type="button"
+            class="file-list-item"
+            data-file-url="https://cdn.jsdelivr.net/gh/mlightcad/cad-data@main/data/map-of-uae.dwg"
+          >
+            map-of-uae.dwg
+          </button>
+          <button
+            type="button"
+            class="file-list-item"
+            data-file-url="https://cdn.jsdelivr.net/gh/mlightcad/cad-data@main/data/patient-chairs.dwg"
+          >
+            patient-chairs.dwg
+          </button>
+          </div>
+        </div>
+      </aside>
+      <div
+        class="file-sidebar-resize-handle"
+        id="fileSidebarResizeHandle"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize predefined files panel"
+        tabindex="-1"
+      ></div>
+      </div>
+
+      <main class="viewer-pane" id="viewerPane">
+        <div class="dev-toolbar is-disabled" id="devToolbar" role="toolbar" aria-label="Viewer demo controls">
+          <button type="button" id="devNewButton" class="dev-toolbar-primary" aria-label="New drawing">
+            New
+          </button>
+          <div class="dev-toolbar-menu-wrap">
+            <button type="button" id="devDockButton" disabled aria-haspopup="menu" aria-expanded="false">
+              Dock
+            </button>
+            <div id="devDockMenu" class="dev-toolbar-menu" hidden role="menu" aria-label="Dock panel controls">
+              <div class="dev-toolbar-menu-section">
+                <button type="button" id="devDockOpenToggle" class="dev-toolbar-menu-toggle" role="menuitem">
+                  Open Dock
+                </button>
+              </div>
+              <div class="dev-toolbar-menu-section">
+                <button type="button" id="devDockAddTab" class="dev-toolbar-menu-toggle" role="menuitem">
+                  Add Dock Tab
+                </button>
+              </div>
+              <div class="dev-toolbar-menu-section">
+                <label class="dev-toolbar-menu-field" for="devDockSizeInput">
+                  <span class="dev-toolbar-menu-label" id="devDockSizeLabel">Width (px)</span>
+                  <input
+                    type="number"
+                    id="devDockSizeInput"
+                    min="120"
+                    max="9999"
+                    step="1"
+                    value="280"
+                    disabled
+                  />
+                </label>
+              </div>
+            </div>
+          </div>
+          <div class="dev-toolbar-menu-wrap">
+            <button type="button" id="devViewerToolbarButton" disabled aria-haspopup="menu" aria-expanded="false">
+              Toolbar
+            </button>
+            <div id="devViewerToolbarMenu" class="dev-toolbar-menu" hidden role="menu" aria-label="Toolbar controls">
+              <div class="dev-toolbar-menu-section">
+                <label class="dev-toolbar-menu-field" for="devToolbarLayoutSelect">
+                  <span class="dev-toolbar-menu-label">Items layout</span>
+                  <select id="devToolbarLayoutSelect" disabled aria-label="Toolbar items layout">
+                    <option value="default">Built-in default</option>
+                  </select>
+                </label>
+              </div>
+              <div class="dev-toolbar-menu-section">
+                <span class="dev-toolbar-menu-label">Position</span>
+                <div class="dev-toolbar-menu-actions" role="group" aria-label="Toolbar position">
+                  <button type="button" data-viewer-toolbar-placement="top" role="menuitem">Top</button>
+                  <button type="button" data-viewer-toolbar-placement="bottom" role="menuitem">Bottom</button>
+                  <button type="button" data-viewer-toolbar-placement="left" role="menuitem">Left</button>
+                  <button type="button" data-viewer-toolbar-placement="right" role="menuitem">Right</button>
+                </div>
+              </div>
+              <div class="dev-toolbar-menu-section">
+                <label class="dev-toolbar-menu-field" for="devViewerToolbarEdgeOffset">
+                  <span class="dev-toolbar-menu-label">Edge inset (px)</span>
+                  <input
+                    type="number"
+                    id="devViewerToolbarEdgeOffset"
+                    min="0"
+                    max="128"
+                    step="1"
+                    value="8"
+                    disabled
+                  />
+                </label>
+              </div>
+              <div class="dev-toolbar-menu-section">
+                <button type="button" id="devViewerToolbarVisibilityToggle" class="dev-toolbar-menu-toggle" role="menuitem">
+                  Hide Toolbar
+                </button>
+              </div>
+              <div class="dev-toolbar-menu-section">
+                <button type="button" id="devViewerToolbarCollapseToggle" class="dev-toolbar-menu-toggle" role="menuitem">
+                  Collapse Toolbar
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="dev-toolbar-menu-wrap">
+            <button type="button" id="devDisplayButton" disabled aria-haspopup="menu" aria-expanded="false">
+              Display
+            </button>
+            <div id="devDisplayMenu" class="dev-toolbar-menu" hidden role="menu" aria-label="Display controls">
+              <div class="dev-toolbar-menu-section">
+                <label class="dev-toolbar-menu-check" for="devDisplayLineWeight">
+                  <input type="checkbox" id="devDisplayLineWeight" disabled />
+                  <span>Line weight</span>
+                </label>
+              </div>
+              <div class="dev-toolbar-menu-section">
+                <label class="dev-toolbar-menu-check" for="devDisplayCommandLine">
+                  <input type="checkbox" id="devDisplayCommandLine" disabled />
+                  <span>Command line</span>
+                </label>
+              </div>
+              <div class="dev-toolbar-menu-section">
+                <label class="dev-toolbar-menu-check" for="devDisplaySidebar">
+                  <input type="checkbox" id="devDisplaySidebar" disabled />
+                  <span>Sidebar</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+        <section class="viewer-canvas-area">
+          <div class="empty-state" id="emptyState">
+            <button type="button" class="open-main-button" id="centerOpenButton">Open File</button>
+          </div>
+          <input type="file" id="fileInputElement" accept=".dxf,.dwg" />
+          <div id="cad-container"></div>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,45 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>M2 progressive rendering bench</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #111;
+        color: #eee;
+        font-family: monospace;
+      }
+      #bar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: 9;
+        padding: 4px 10px;
+        background: rgba(0, 0, 0, 0.75);
+        font-size: 13px;
+      }
+      #cad-root {
+        position: fixed;
+        inset: 0;
+      }
+      #paint {
+        position: fixed;
+        top: 26px;
+        left: 0;
+        z-index: 9;
+        padding: 4px 10px;
+        background: rgba(0, 0, 0, 0.75);
+        font-size: 13px;
+        color: #8f8;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="cad-root"></div>
+    <div id="bar">status: initializing…</div>
+    <div id="paint">canvas: pending</div>
+    <script type="module" src="/bench/progressive.ts"></script>
+  </body>
+</html>

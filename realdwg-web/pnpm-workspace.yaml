@@ -1,0 +1,10 @@
+packages:
+  - 'packages/*'
+  # Private maintainer clone; must not appear in the public lockfile
+  - '!packages/dwg-converter'
+allowBuilds:
+  '@parcel/watcher': true
+  '@swc/core': true
+  core-js: true
+  esbuild: true
+  nx: true

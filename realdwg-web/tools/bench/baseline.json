@@ -1,0 +1,13 @@
+{
+  "date": "2026-08-18",
+  "commit": "local-uncommitted",
+  "fixtures": {
+    "lines-100000":  { "entities": 100000, "bestMs": 760.77, "peakHeapMB": 125.4 },
+    "lwpolylines-20000": { "entities": 20000, "bestMs": 281.62, "peakHeapMB": 30.7 },
+    "mixed-100000":  { "entities": 100000, "bestMs": 998.25, "peakHeapMB": 124.2 },
+    "bigcoords-100000": { "entities": 100000, "bestMs": 837.69, "peakHeapMB": 121.4 },
+    "circles-50000": { "entities": 50000, "bestMs": 474.55, "peakHeapMB": 63.6 },
+    "arcs-50000":  { "entities": 50000, "bestMs": 537.75, "peakHeapMB": 66.9 },
+    "splines-500":  { "entities": 500, "bestMs": 96.70, "peakHeapMB": 0 }
+  }
+}
