@@ -304,6 +304,9 @@ export class AcTrBatchedLine extends AcTrBatchedLineBase {
     worldOffset: THREE.Vector3 = new THREE.Vector3()
   ) {
     this.rebaseGeometryInPlace(geometry, worldOffset)
+    // Every packed line geometry carries entity-local cumulative distances so
+    // the selection-dash shader can discard fragments along highlighted slots.
+    AcTrBufferGeometryUtil.computeSegmentLineDistances(geometry)
     this._initializeGeometry(geometry)
     this._validateGeometry(geometry)
 
@@ -446,6 +449,9 @@ export class AcTrBatchedLine extends AcTrBatchedLineBase {
       throw new Error('AcTrBatchedLine: Maximum geometry count reached.')
     }
 
+    if (!geometry.hasAttribute('lineDistance')) {
+      AcTrBufferGeometryUtil.computeSegmentLineDistances(geometry)
+    }
     this._validateGeometry(geometry)
 
     const batchGeometry = this.geometry

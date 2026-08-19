@@ -1,11 +1,25 @@
 import * as THREE from 'three'
 
-import {
-  HIGHLIGHT_HOVER_COLOR,
-  HIGHLIGHT_SELECT_COLOR
-} from '../../util/AcTrMaterialUtil'
+import { AcTrMaterialManager } from '../../style/AcTrMaterialManager'
 import { getMaterialRuntimeUserData } from '../../util/AcTrObjectUserData'
 import { AcTrBatchHighlightState } from './AcTrBatchHighlightState'
+
+/** On-screen dash segment length (px) applied to highlighted line slots. */
+export const HIGHLIGHT_DASH_SIZE_PX = 8
+/** On-screen dash gap length (px) applied to highlighted line slots. */
+export const HIGHLIGHT_DASH_GAP_PX = 5
+
+/**
+ * Dash wiring variant derived from the material being patched.
+ *
+ * - `'line'`  — thin lines (`LineBasicMaterial`, pattern `ShaderMaterial`);
+ *   distances come from the per-vertex `lineDistance` attribute.
+ * - `'line2'` — wide lines (`LineMaterial`); distances come from the
+ *   per-instance `instanceDistanceStart/End` attributes.
+ * - `'none'`  — meshes and points; their materials are left untouched and
+ *   selection feedback comes from vertex markers instead.
+ */
+export type AcTrBatchHighlightDashMode = 'line' | 'line2' | 'none'
 
 /** Uniform bag injected into batch highlight shader programs. */
 export type AcTrBatchHighlightUniforms = {
@@ -13,18 +27,26 @@ export type AcTrBatchHighlightUniforms = {
   u_highlightMask: { value: THREE.Texture }
   /** Mask texture width and height in pixels. */
   u_highlightMaskSize: { value: THREE.Vector2 }
-  /** Fragment color applied when the slot is selected. */
-  u_highlightSelectColor: { value: THREE.Color }
-  /** Fragment color applied when the slot is hovered. */
-  u_highlightHoverColor: { value: THREE.Color }
+  /** On-screen dash segment length in pixels. */
+  u_highlightDashSize: { value: number }
+  /** On-screen dash gap length in pixels. */
+  u_highlightDashGap: { value: number }
+  /**
+   * Shared live camera-zoom uniform (≈ screen px per world unit). Named
+   * distinctly because pattern line shaders already declare `u_cameraZoom` in
+   * their own source — redeclaring it here would fail program compilation.
+   */
+  u_highlightZoom: { value: number }
 }
 
 const HIGHLIGHT_FRAGMENT_DECL = /* glsl */ `
 uniform sampler2D u_highlightMask;
 uniform vec2 u_highlightMaskSize;
-uniform vec3 u_highlightSelectColor;
-uniform vec3 u_highlightHoverColor;
+uniform float u_highlightDashSize;
+uniform float u_highlightDashGap;
+uniform float u_highlightZoom;
 varying float vBatchSlotId;
+varying float vBatchLineDistance;
 
 vec3 applyBatchHighlight(vec3 color) {
   if (u_highlightMaskSize.x <= 0.0 || u_highlightMaskSize.y <= 0.0) {
@@ -35,11 +57,12 @@ vec3 applyBatchHighlight(vec3 color) {
     (floor(vBatchSlotId / u_highlightMaskSize.x) + 0.5) / u_highlightMaskSize.y
   );
   vec4 mask = texture2D(u_highlightMask, maskUv);
-  if (mask.r > 0.5) {
-    return u_highlightSelectColor;
-  }
-  if (mask.g > 0.5) {
-    return u_highlightHoverColor;
+  if (mask.r > 0.5 || mask.g > 0.5) {
+    float dashPeriod = u_highlightDashSize + u_highlightDashGap;
+    if (dashPeriod > 0.0 &&
+        mod(vBatchLineDistance * u_highlightZoom, dashPeriod) > u_highlightDashSize) {
+      discard;
+    }
   }
   return color;
 }
@@ -63,14 +86,18 @@ const warnedUnpatchedMaterials = new Set<string>()
 /**
  * Creates default highlight uniform values backed by a 1×1 empty mask texture.
  *
+ * The zoom uniform is the shared {@link AcTrMaterialManager.CameraZoomUniform}
+ * reference so dash density follows the live camera without per-material work.
+ *
  * @returns Fresh uniform bag for one material instance.
  */
 function createHighlightUniforms(): AcTrBatchHighlightUniforms {
   return {
     u_highlightMask: { value: EMPTY_HIGHLIGHT_MASK },
     u_highlightMaskSize: { value: new THREE.Vector2(1, 1) },
-    u_highlightSelectColor: { value: HIGHLIGHT_SELECT_COLOR.clone() },
-    u_highlightHoverColor: { value: HIGHLIGHT_HOVER_COLOR.clone() }
+    u_highlightDashSize: { value: HIGHLIGHT_DASH_SIZE_PX },
+    u_highlightDashGap: { value: HIGHLIGHT_DASH_GAP_PX },
+    u_highlightZoom: AcTrMaterialManager.CameraZoomUniform
   }
 }
 
@@ -91,35 +118,97 @@ function getOrCreateHighlightUniforms(
 }
 
 /**
- * Injects the `slotId` attribute and `vBatchSlotId` varying into a vertex shader.
+ * Resolves the dash wiring variant for one material.
+ *
+ * @param material - Material candidate for the highlight patch.
+ * @returns Dash mode, or `'none'` when the material must not be patched.
+ */
+function resolveDashMode(
+  material: THREE.Material
+): AcTrBatchHighlightDashMode {
+  if (material.type === 'LineMaterial') {
+    return 'line2'
+  }
+  if (material instanceof THREE.LineBasicMaterial) {
+    return 'line'
+  }
+  if (
+    material instanceof THREE.ShaderMaterial &&
+    material.vertexShader.includes('lineDistance')
+  ) {
+    return 'line'
+  }
+  return 'none'
+}
+
+/**
+ * Injects the `slotId` attribute, the line-distance source, and their varyings
+ * into a vertex shader.
+ *
+ * Pattern line materials already declare `attribute float lineDistance`, so the
+ * declaration is only added when missing. Wide-line (`LineMaterial`) shaders
+ * read per-instance distances following three's own `USE_DASH` convention.
  *
  * @param source - Original vertex shader source.
- * @returns Patched vertex shader that forwards the batch slot id to the fragment stage.
+ * @param dashMode - Dash wiring variant from {@link resolveDashMode}.
+ * @returns Patched vertex shader forwarding slot id and line distance.
  */
-function injectVertexSlotId(source: string) {
-  if (source.includes('vBatchSlotId')) {
+function injectVertexHighlight(
+  source: string,
+  dashMode: Exclude<AcTrBatchHighlightDashMode, 'none'>
+) {
+  const needsSlotId = !source.includes('vBatchSlotId')
+  const needsDash = !source.includes('vBatchLineDistance')
+  if (!needsSlotId && !needsDash) {
     return source
   }
 
+  const declarations: string[] = []
+  if (needsSlotId) {
+    declarations.push('attribute float slotId;', 'varying float vBatchSlotId;')
+  }
+  if (needsDash) {
+    if (dashMode === 'line2') {
+      declarations.push(
+        'attribute float instanceDistanceStart;',
+        'attribute float instanceDistanceEnd;'
+      )
+    } else if (!source.includes('attribute float lineDistance')) {
+      declarations.push('attribute float lineDistance;')
+    }
+    declarations.push('varying float vBatchLineDistance;')
+  }
+
   let vertexShader = source
+  const declarationBlock = declarations.join('\n')
   if (vertexShader.includes('#include <common>')) {
     vertexShader = vertexShader.replace(
       '#include <common>',
       `#include <common>
-attribute float slotId;
-varying float vBatchSlotId;`
+${declarationBlock}`
     )
   } else {
-    vertexShader = `attribute float slotId;
-varying float vBatchSlotId;
+    vertexShader = `${declarationBlock}
 ${vertexShader}`
   }
 
+  const assignments: string[] = []
+  if (needsSlotId) {
+    assignments.push('vBatchSlotId = slotId;')
+  }
+  if (needsDash) {
+    assignments.push(
+      dashMode === 'line2'
+        ? 'vBatchLineDistance = ( position.y < 0.5 ) ? instanceDistanceStart : instanceDistanceEnd;'
+        : 'vBatchLineDistance = lineDistance;'
+    )
+  }
+  const assignmentBlock = assignments.join('\n')
   if (vertexShader.includes('#include <begin_vertex>')) {
     return vertexShader.replace(
       '#include <begin_vertex>',
       `#include <begin_vertex>
-vBatchSlotId = slotId;`
+${assignmentBlock}`
     )
   }
 
@@ -127,7 +216,7 @@ vBatchSlotId = slotId;`
     return vertexShader.replace(
       'void main() {',
       `void main() {
-vBatchSlotId = slotId;`
+${assignmentBlock}`
     )
   }
 
@@ -135,10 +224,11 @@ vBatchSlotId = slotId;`
 }
 
 /**
- * Injects highlight sampling helpers and applies tinting before final color output.
+ * Injects highlight sampling helpers and applies dash discards before final
+ * color output.
  *
  * Prefers replacing the final `gl_FragColor` assignment itself — that applies
- * the tint to the already-computed outgoing color and never reads
+ * the effect to the already-computed outgoing color and never reads
  * `gl_FragColor` before it was written (undefined behavior some drivers
  * exploit). When no assignment pattern matches, falls back to inserting the
  * apply call before standard output-processing includes.
@@ -193,7 +283,7 @@ function injectFragmentHighlight(source: string): {
 
   // 2) Include-adjacent insertion — the assignment happens before these
   //    output-processing includes in every current three.js built-in, so the
-  //    read is well-defined; the tint then survives tone mapping / dithering.
+  //    read is well-defined; the effect then survives tone mapping / dithering.
   const applySnippet =
     'gl_FragColor.rgb = applyBatchHighlight(gl_FragColor.rgb);'
 
@@ -248,7 +338,7 @@ function warnUnpatchedHighlightMaterial(material: THREE.Material) {
   }
   warnedUnpatchedMaterials.add(key)
   console.warn(
-    `[AcTrBatchHighlight] Could not inject highlight shader for material type "${key}". Highlight tinting may be skipped.`
+    `[AcTrBatchHighlight] Could not inject highlight shader for material type "${key}". Highlight dashing may be skipped.`
   )
 }
 
@@ -264,8 +354,9 @@ function mergeShaderUniforms(
 ) {
   shader.uniforms.u_highlightMask = uniforms.u_highlightMask
   shader.uniforms.u_highlightMaskSize = uniforms.u_highlightMaskSize
-  shader.uniforms.u_highlightSelectColor = uniforms.u_highlightSelectColor
-  shader.uniforms.u_highlightHoverColor = uniforms.u_highlightHoverColor
+  shader.uniforms.u_highlightDashSize = uniforms.u_highlightDashSize
+  shader.uniforms.u_highlightDashGap = uniforms.u_highlightDashGap
+  shader.uniforms.u_highlightZoom = uniforms.u_highlightZoom
 }
 
 /**
@@ -281,8 +372,9 @@ function attachHighlightUniforms(
   if (material instanceof THREE.ShaderMaterial) {
     material.uniforms.u_highlightMask = uniforms.u_highlightMask
     material.uniforms.u_highlightMaskSize = uniforms.u_highlightMaskSize
-    material.uniforms.u_highlightSelectColor = uniforms.u_highlightSelectColor
-    material.uniforms.u_highlightHoverColor = uniforms.u_highlightHoverColor
+    material.uniforms.u_highlightDashSize = uniforms.u_highlightDashSize
+    material.uniforms.u_highlightDashGap = uniforms.u_highlightDashGap
+    material.uniforms.u_highlightZoom = uniforms.u_highlightZoom
   }
 }
 
@@ -299,8 +391,12 @@ function markMaterialProgramDirty(material: THREE.Material) {
 }
 
 /**
- * Patches one material so batched draw calls can tint highlighted slots via
- * a per-batch mask texture bound in {@link bindBatchHighlightUniforms}.
+ * Patches one line material so batched draw calls render highlighted slots as
+ * screen-space dashes (without changing their color) via a per-batch mask
+ * texture bound in {@link bindBatchHighlightUniforms}.
+ *
+ * Mesh and point materials are intentionally left untouched: their selection
+ * feedback is provided by vertex markers, so they never pay a recompile.
  *
  * @param material - Drawable material compiled for batched geometry rendering.
  */
@@ -309,11 +405,16 @@ export function patchMaterialForBatchHighlight(material: THREE.Material) {
   const uniforms = getOrCreateHighlightUniforms(material)
 
   if (!runtime.batchHighlightPatched) {
+    const dashMode = resolveDashMode(material)
+    if (dashMode === 'none') {
+      return
+    }
+
     if (material instanceof THREE.ShaderMaterial) {
       // Compute the fragment patch first. When highlight cannot be wired into
       // this shader, leave the material completely untouched: a half-patched
       // program would force a rebuild for nothing and could drop the whole
-      // batch draw on strict drivers. Highlight tinting is simply skipped
+      // batch draw on strict drivers. Highlight dashing is simply skipped
       // for such materials.
       const fragmentPatch = injectFragmentHighlight(material.fragmentShader)
       if (!fragmentPatch.injected) {
@@ -321,7 +422,10 @@ export function patchMaterialForBatchHighlight(material: THREE.Material) {
         return
       }
       runtime.batchHighlightPatched = true
-      material.vertexShader = injectVertexSlotId(material.vertexShader)
+      material.vertexShader = injectVertexHighlight(
+        material.vertexShader,
+        dashMode
+      )
       material.fragmentShader = fragmentPatch.source
       attachHighlightUniforms(material, uniforms)
       markMaterialProgramDirty(material)
@@ -338,13 +442,13 @@ export function patchMaterialForBatchHighlight(material: THREE.Material) {
         return
       }
       mergeShaderUniforms(shader, uniforms)
-      shader.vertexShader = injectVertexSlotId(shader.vertexShader)
+      shader.vertexShader = injectVertexHighlight(shader.vertexShader, dashMode)
       shader.fragmentShader = fragmentPatch.source
     }
 
-    const previousCacheKey = material.customProgramCacheKey
+    const previousCacheKey = material.customProgramCacheKey ?? (() => '')
     material.customProgramCacheKey = () =>
-      `${previousCacheKey.call(material)}|batchHighlight`
+      `${previousCacheKey.call(material)}|batchHighlight:${dashMode}`
 
     markMaterialProgramDirty(material)
   }
@@ -371,8 +475,8 @@ export function bindBatchHighlightUniforms(
     uniforms.u_highlightMask.value = texture
     const dimensions = state.getMaskTextureDimensions()
     uniforms.u_highlightMaskSize.value.set(dimensions.width, dimensions.height)
-    uniforms.u_highlightSelectColor.value.copy(HIGHLIGHT_SELECT_COLOR)
-    uniforms.u_highlightHoverColor.value.copy(HIGHLIGHT_HOVER_COLOR)
+    uniforms.u_highlightDashSize.value = HIGHLIGHT_DASH_SIZE_PX
+    uniforms.u_highlightDashGap.value = HIGHLIGHT_DASH_GAP_PX
     if (entry instanceof THREE.ShaderMaterial) {
       entry.uniformsNeedUpdate = true
     }

@@ -26,14 +26,9 @@ import {
   AcTrSubEntityTraitsUtil
 } from '../util'
 import {
-  HIGHLIGHT_HOVER_COLOR,
-  HIGHLIGHT_SELECT_COLOR
-} from '../util/AcTrMaterialUtil'
-import {
   type AcTrHighlightOverlayGroup,
   copyHighlightObjectFlags,
   getHighlightUserData,
-  getObjectUserData,
   getSceneDrawableUserData,
   markHighlightOverlayGroup,
   patchDrawableMaterialFromCache,
@@ -219,21 +214,6 @@ export class AcTrBatchedGroup extends THREE.Group {
   private static readonly INITIAL_MESH_INDEX_CAPACITY = 256
   private static readonly INITIAL_POINT_VERTEX_CAPACITY = 16
   /**
-   * Cached highlight material clones keyed by source material and highlight kind.
-   *
-   * Shared across all {@link AcTrBatchedGroup} instances for unbatched drawables.
-   * Entries are evicted when the source material is disposed.
-   */
-  private static readonly sharedHighlightMaterialsBySource = new WeakMap<
-    THREE.Material,
-    Map<AcTrBatchHighlightKind, THREE.Material>
-  >()
-  private static readonly onSourceMaterialDisposed = (event: THREE.Event) => {
-    AcTrBatchedGroup.releaseSharedHighlightMaterials(
-      event.target as THREE.Material
-    )
-  }
-  /**
    * Batched line map for line segments without vertex index.
    * - the key is material id
    * - the value is one or more batched lines split by world origin
@@ -286,10 +266,6 @@ export class AcTrBatchedGroup extends THREE.Group {
    * use slot-mask or in-place material swap instead of overlay drawables.
    */
   private _hoverObjects: AcTrHighlightOverlayGroup
-  /** Entity ids whose unbatched drawables are currently selection-highlighted. */
-  private _unbatchedSelectedIds = new Set<string>()
-  /** Entity ids whose unbatched drawables are currently hover-highlighted. */
-  private _unbatchedHoveredIds = new Set<string>()
   /**
    * Non-batched objects (for render paths that cannot be merged, e.g. fat lines).
    */
@@ -504,8 +480,6 @@ export class AcTrBatchedGroup extends THREE.Group {
     })
     this._unbatchedObjects.clear()
     this._unbatchedEntities.clear()
-    this._unbatchedSelectedIds.clear()
-    this._unbatchedHoveredIds.clear()
     this._entitiesMap.clear()
     return this
   }
@@ -1101,9 +1075,6 @@ export class AcTrBatchedGroup extends THREE.Group {
         )
     )
 
-    if (geometry.hasAttribute('lineDistance')) {
-      AcTrBufferGeometryUtil.recomputeLineDistanceForLineSegments(geometry)
-    }
     const geometryId = batchedLine.addGeometry(geometry, -1, -1, worldOffset)
     batchedLine.setGeometryInfo(geometryId, { objectId: options.objectId })
 
@@ -1412,7 +1383,12 @@ export class AcTrBatchedGroup extends THREE.Group {
   }
 
   /**
-   * Applies or clears batched/unbatched highlight state for entity ids.
+   * Applies or clears batched highlight state for entity ids.
+   *
+   * Only batched slots take part in the highlight mask. Unbatched drawables
+   * (text glyph trees, pattern hatches, …) intentionally keep their original
+   * materials — their selection feedback comes from vertex markers instead of
+   * an in-place material tint.
    *
    * @param objectIds - Database object ids whose highlight state should change.
    * @param kind - Whether to update selection or hover state.
@@ -1441,152 +1417,9 @@ export class AcTrBatchedGroup extends THREE.Group {
           dirtyBatches.add(batchedObject)
         }
       })
-
-      const unbatchedObjects = this._unbatchedEntities.get(objectId)
-      if (unbatchedObjects) {
-        if (kind === 'select') {
-          if (enabled) {
-            this._unbatchedSelectedIds.add(objectId)
-          } else {
-            this._unbatchedSelectedIds.delete(objectId)
-          }
-        } else if (enabled) {
-          this._unbatchedHoveredIds.add(objectId)
-        } else {
-          this._unbatchedHoveredIds.delete(objectId)
-        }
-
-        for (const object of unbatchedObjects) {
-          this.refreshUnbatchedHighlight(object, objectId)
-        }
-      }
     }
 
     dirtyBatches.forEach(batch => batch.flushHighlightMask())
-  }
-
-  /**
-   * Applies the effective unbatched highlight material for one entity id.
-   *
-   * Selection takes precedence over hover, matching batched slot-mask behavior.
-   *
-   * @param object - Root of an unbatched drawable subtree.
-   * @param objectId - Database object id owning the drawable subtree.
-   */
-  private refreshUnbatchedHighlight(object: THREE.Object3D, objectId: string) {
-    if (this._unbatchedSelectedIds.has(objectId)) {
-      this.applyUnbatchedHighlightMaterial(object, 'select')
-      return
-    }
-    if (this._unbatchedHoveredIds.has(objectId)) {
-      this.applyUnbatchedHighlightMaterial(object, 'hover')
-      return
-    }
-    this.unhighlightUnbatchedObject(object)
-  }
-
-  /**
-   * Recursively swaps unbatched drawables to shared highlight materials.
-   *
-   * @param object - Root of an unbatched drawable subtree.
-   * @param kind - Whether to apply selection or hover tinting.
-   */
-  private applyUnbatchedHighlightMaterial(
-    object: THREE.Object3D,
-    kind: AcTrBatchHighlightKind
-  ) {
-    if ('material' in object) {
-      const material = object.material as THREE.Material | THREE.Material[]
-      const objectData = getObjectUserData(object)
-      if (objectData.originalMaterial == null) {
-        objectData.originalMaterial = material
-      }
-      object.material = this.getSharedHighlightMaterial(material, kind)
-      return
-    }
-
-    for (const child of object.children) {
-      this.applyUnbatchedHighlightMaterial(child, kind)
-    }
-  }
-
-  /**
-   * Restores original materials on one unbatched drawable subtree.
-   *
-   * @param object - Root of an unbatched drawable subtree.
-   */
-  private unhighlightUnbatchedObject(object: THREE.Object3D) {
-    if ('material' in object) {
-      const objectData = getObjectUserData(object)
-      if (objectData.originalMaterial != null) {
-        object.material = objectData.originalMaterial
-        delete objectData.originalMaterial
-      }
-      return
-    }
-
-    for (const child of object.children) {
-      this.unhighlightUnbatchedObject(child)
-    }
-  }
-
-  /**
-   * Returns one cached highlight material per source material and highlight kind.
-   *
-   * @param material - Source material or material array from an unbatched drawable.
-   * @param kind - Whether to tint for selection or hover.
-   * @returns Highlight material clone suitable for in-place tinting.
-   */
-  private getSharedHighlightMaterial(
-    material: THREE.Material | THREE.Material[],
-    kind: AcTrBatchHighlightKind
-  ): THREE.Material | THREE.Material[] {
-    if (Array.isArray(material)) {
-      return material.map(
-        entry => this.getSharedHighlightMaterial(entry, kind) as THREE.Material
-      )
-    }
-
-    let cache = AcTrBatchedGroup.sharedHighlightMaterialsBySource.get(material)
-    if (!cache) {
-      cache = new Map()
-      AcTrBatchedGroup.sharedHighlightMaterialsBySource.set(material, cache)
-      material.addEventListener(
-        'dispose',
-        AcTrBatchedGroup.onSourceMaterialDisposed
-      )
-    }
-
-    const cached = cache.get(kind)
-    if (cached) {
-      return cached
-    }
-
-    const highlightMaterial = AcTrMaterialUtil.cloneMaterial(material)
-    if (!Array.isArray(highlightMaterial)) {
-      AcTrMaterialUtil.setMaterialColor(
-        highlightMaterial,
-        kind === 'hover' ? HIGHLIGHT_HOVER_COLOR : HIGHLIGHT_SELECT_COLOR
-      )
-      cache.set(kind, highlightMaterial)
-      return highlightMaterial
-    }
-
-    return highlightMaterial
-  }
-
-  /**
-   * Disposes cached highlight clones when a source unbatched material is disposed.
-   *
-   * @param source - Source material whose highlight clones should be released.
-   */
-  private static releaseSharedHighlightMaterials(source: THREE.Material) {
-    const cache = AcTrBatchedGroup.sharedHighlightMaterialsBySource.get(source)
-    if (!cache) {
-      return
-    }
-    cache.forEach(highlightMaterial => highlightMaterial.dispose())
-    AcTrBatchedGroup.sharedHighlightMaterialsBySource.delete(source)
   }
 
   /**
@@ -1857,9 +1690,6 @@ export class AcTrBatchedGroup extends THREE.Group {
     ) {
       geometry.dispose()
       return null
-    }
-    if (geometry.hasAttribute('lineDistance')) {
-      AcTrBufferGeometryUtil.recomputeLineDistanceForLineSegments(geometry)
     }
     const geometryId = batchedLine.addGeometry(geometry, -1, -1, worldOffset)
     batchedLine.setGeometryInfo(geometryId, userData)

@@ -4,7 +4,6 @@ import { AcTrBatchedGroup } from '../src/batch/AcTrBatchedGroup'
 import { RTE_REBASE_THRESHOLD } from '../src/draw/AcTrBatchDrawPolicy'
 import { AcTrEntity } from '../src/object/AcTrEntity'
 import { AcTrRenderContext } from '../src/renderer/AcTrRenderContext'
-import { HIGHLIGHT_SELECT_COLOR } from '../src/util/AcTrMaterialUtil'
 import {
   getObjectUserData,
   getSceneDrawableUserData
@@ -86,7 +85,7 @@ function findUnbatchedPlacementClone(group: AcTrBatchedGroup) {
 }
 
 describe('AcTrBatchedGroup unbatched operations', () => {
-  it('selects and unselects an unbatched placement root in place', () => {
+  it('selects and unselects an unbatched placement root without swapping materials', () => {
     const group = new AcTrBatchedGroup()
     const placementRoot = createPlacementRoot(
       { x: RTE_REBASE_THRESHOLD + 100, y: 3_000_000, z: 0 },
@@ -96,24 +95,26 @@ describe('AcTrBatchedGroup unbatched operations', () => {
     getSceneDrawableUserData(placementRoot).bboxIntersectionCheck = true
 
     group.addEntity(createEntity('mtext-1', placementRoot))
+    const clonedRoot = findUnbatchedPlacementClone(group)
+    expect(clonedRoot).toBeDefined()
+    const mesh = clonedRoot!.children[0] as THREE.Mesh
+    const originalMaterial = mesh.material
+
     group.select('mtext-1')
 
     const selectedGroup = group.children[1] as THREE.Group
     expect(selectedGroup.children).toHaveLength(0)
-    const clonedRoot = findUnbatchedPlacementClone(group)
-    expect(clonedRoot).toBeDefined()
-    const mesh = clonedRoot!.children[0] as THREE.Mesh
-    expect(getObjectUserData(mesh).originalMaterial).toBeDefined()
-    expect((mesh.material as THREE.MeshBasicMaterial).color.getHex()).toBe(
-      HIGHLIGHT_SELECT_COLOR.getHex()
-    )
+    // Unbatched drawables are no longer tinted on selection: the original
+    // material stays in place and feedback comes from vertex markers.
+    expect(mesh.material).toBe(originalMaterial)
+    expect(getObjectUserData(mesh).originalMaterial).toBeUndefined()
 
     group.unselect('mtext-1')
     expect(selectedGroup.children).toHaveLength(0)
-    expect(getObjectUserData(mesh).originalMaterial).toBeUndefined()
+    expect(mesh.material).toBe(originalMaterial)
   })
 
-  it('restores unbatched materials on unselect without disposing shared highlight materials', () => {
+  it('keeps unbatched materials untouched across select and unselect', () => {
     const group = new AcTrBatchedGroup()
     const placementRoot = createPlacementRoot(
       { x: RTE_REBASE_THRESHOLD + 100, y: 3_000_000, z: 0 },
@@ -122,14 +123,14 @@ describe('AcTrBatchedGroup unbatched operations', () => {
     getSceneDrawableUserData(placementRoot).noBatch = true
 
     group.addEntity(createEntity('mtext-1', placementRoot))
-    group.select('mtext-1')
 
     const clonedRoot = findUnbatchedPlacementClone(group)
     const mesh = clonedRoot!.children[0] as THREE.Mesh
-    const originalMaterial = getObjectUserData(mesh).originalMaterial as
-      | THREE.Material
-      | undefined
-    expect(originalMaterial).toBeDefined()
+    const originalMaterial = mesh.material
+
+    group.select('mtext-1')
+    expect(mesh.material).toBe(originalMaterial)
+    expect(getObjectUserData(mesh).originalMaterial).toBeUndefined()
 
     group.unselect('mtext-1')
     expect(mesh.material).toBe(originalMaterial)

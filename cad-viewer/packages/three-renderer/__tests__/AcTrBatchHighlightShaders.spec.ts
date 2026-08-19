@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 
 import {
   AcTrBatchHighlightState,
@@ -78,13 +79,15 @@ describe('AcTrBatchHighlightShaders', () => {
     expect(chained).toBe(true)
   })
 
-  it('prepends the highlight helper when replacing a literal gl_FragColor assignment', () => {
+  it('patches a line shader material with dash discard and no color tint', () => {
     // LineMaterial-style raw source: the final assignment is declared
     // literally, so the assignment replacement wins. The patched shader must
     // define the helper before calling it, otherwise the program fails to
     // compile with "no matching overloaded function found".
     const material = new THREE.ShaderMaterial({
-      vertexShader: 'void main() { gl_Position = vec4(position, 1.0); }',
+      vertexShader:
+        'attribute float lineDistance;\n' +
+        'void main() { gl_Position = vec4(position, 1.0); }',
       fragmentShader:
         'uniform vec3 diffuse;\nuniform float alpha;\n' +
         'void main() { gl_FragColor = vec4( diffuseColor.rgb, alpha ); }'
@@ -98,21 +101,73 @@ describe('AcTrBatchHighlightShaders', () => {
     expect(material.fragmentShader).toContain(
       'vec3 applyBatchHighlight(vec3 color)'
     )
+    expect(material.fragmentShader).toContain('discard')
+    // Highlight no longer tints: no highlight color uniforms, and the helper
+    // returns the incoming color unchanged.
+    expect(material.fragmentShader).not.toContain('u_highlightSelectColor')
+    expect(material.fragmentShader).toContain('return color;')
+    // Vertex stage forwards slot id and line distance.
+    expect(material.vertexShader).toContain('vBatchSlotId')
+    expect(material.vertexShader).toContain(
+      'vBatchLineDistance = lineDistance;'
+    )
+    expect(material.uniforms.u_highlightMask).toBeDefined()
+    expect(material.uniforms.u_highlightDashSize).toBeDefined()
     // three r172: needsUpdate is a setter-only accessor that bumps version.
     expect(material.version).toBeGreaterThan(0)
   })
 
-  it('leaves unpatched materials alone when injection cannot be wired', () => {
+  it('injects per-instance dash distances for wide-line materials', () => {
+    const material = new LineMaterial()
+    patchMaterialForBatchHighlight(material)
+
+    expect(typeof material.onBeforeCompile).toBe('function')
+
+    const shader = {
+      vertexShader:
+        'attribute vec3 instanceStart;\nattribute vec3 instanceEnd;\n' +
+        'void main() { gl_Position = vec4(position, 1.0); }',
+      fragmentShader:
+        'void main() { gl_FragColor = vec4( diffuseColor.rgb, alpha ); }',
+      uniforms: {}
+    } as unknown as THREE.WebGLProgramParametersWithUniforms
+    material.onBeforeCompile!(shader, {} as THREE.WebGLRenderer)
+
+    expect(shader.vertexShader).toContain(
+      'vBatchLineDistance = ( position.y < 0.5 ) ? instanceDistanceStart : instanceDistanceEnd;'
+    )
+    expect(shader.fragmentShader).toContain('discard')
+    expect(shader.fragmentShader).not.toContain('u_highlightSelectColor')
+    expect(shader.uniforms.u_highlightMask).toBeDefined()
+  })
+
+  it('leaves mesh, point, and unwireable materials completely untouched', () => {
+    // three r172 assigns a default no-op onBeforeCompile on every material,
+    // so identity checks the hook instead of expecting it to be undefined.
+    const meshMaterial = new THREE.MeshBasicMaterial()
+    const meshHook = meshMaterial.onBeforeCompile
+    patchMaterialForBatchHighlight(meshMaterial)
+    expect(meshMaterial.onBeforeCompile).toBe(meshHook)
+    expect(meshMaterial.version).toBe(0)
+
+    const pointMaterial = new THREE.PointsMaterial()
+    const pointHook = pointMaterial.onBeforeCompile
+    patchMaterialForBatchHighlight(pointMaterial)
+    expect(pointMaterial.onBeforeCompile).toBe(pointHook)
+    expect(pointMaterial.version).toBe(0)
+
+    // No matching assignment pattern and no output-processing includes:
+    // the material must stay untouched instead of being half-patched.
     const source = 'void main() { gl_FragColor = vec4(1.0); }'
     const material = new THREE.ShaderMaterial({
-      vertexShader: 'void main() { gl_Position = vec4(position, 1.0); }',
+      vertexShader:
+        'attribute float lineDistance;\n' +
+        'void main() { gl_Position = vec4(position, 1.0); }',
       fragmentShader: source
     })
 
     patchMaterialForBatchHighlight(material)
 
-    // No matching assignment pattern and no output-processing includes:
-    // the material must stay untouched instead of being half-patched.
     expect(material.fragmentShader).toBe(source)
     expect(material.version).toBe(0)
   })

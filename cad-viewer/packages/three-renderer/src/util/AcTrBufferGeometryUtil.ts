@@ -172,6 +172,79 @@ export class AcTrBufferGeometryUtil {
     )
   }
 
+  /**
+   * Computes per-vertex cumulative `lineDistance` for line-segment geometry.
+   *
+   * Distances accumulate along segment pairs starting from zero, so each
+   * geometry (one packed entity) gets an entity-local dash phase. Indexed
+   * geometry follows index pairs; non-indexed geometry follows consecutive
+   * vertex pairs. Unlike {@link recomputeLineDistanceForLineSegments} this
+   * never trims vertices or drops the attribute, which keeps batch slot
+   * reservations and the batch attribute contract intact.
+   *
+   * @param geometry - Line-segment geometry mutated in place.
+   */
+  static computeSegmentLineDistances(geometry: THREE.BufferGeometry) {
+    const positionAttribute = geometry.getAttribute('position') as
+      | THREE.BufferAttribute
+      | undefined
+    if (!positionAttribute) {
+      geometry.deleteAttribute('lineDistance')
+      return
+    }
+    if (positionAttribute.count < 2) {
+      geometry.setAttribute(
+        'lineDistance',
+        new THREE.Float32BufferAttribute(positionAttribute.count, 1)
+      )
+      return
+    }
+
+    const lineDistances = new Float32Array(positionAttribute.count)
+    const index = geometry.getIndex()
+    let accumulated = 0
+
+    if (index) {
+      // Degenerate padding pairs may trail the real segments inside the index
+      // buffer (e.g. a two-vertex line backed by a four-slot index array).
+      // The first segment touching a vertex defines its distance so those
+      // padding pairs cannot overwrite real segment distances.
+      const written = new Uint8Array(positionAttribute.count)
+      for (let i = 0; i + 1 < index.count; i += 2) {
+        const a = index.getX(i)
+        const b = index.getX(i + 1)
+        if (a >= positionAttribute.count || b >= positionAttribute.count) {
+          continue
+        }
+        if (!written[a]) {
+          lineDistances[a] = accumulated
+          written[a] = 1
+        }
+        _vector1.fromBufferAttribute(positionAttribute, a)
+        _vector2.fromBufferAttribute(positionAttribute, b)
+        accumulated += _vector1.distanceTo(_vector2)
+        if (!written[b]) {
+          lineDistances[b] = accumulated
+          written[b] = 1
+        }
+      }
+    } else {
+      const vertexCount = positionAttribute.count - (positionAttribute.count % 2)
+      for (let i = 0; i < vertexCount; i += 2) {
+        lineDistances[i] = accumulated
+        _vector1.fromBufferAttribute(positionAttribute, i)
+        _vector2.fromBufferAttribute(positionAttribute, i + 1)
+        accumulated += _vector1.distanceTo(_vector2)
+        lineDistances[i + 1] = accumulated
+      }
+    }
+
+    geometry.setAttribute(
+      'lineDistance',
+      new THREE.Float32BufferAttribute(lineDistances, 1)
+    )
+  }
+
   // Calculates line distances in world space
   static computeLineDistance(line: THREE.Line) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

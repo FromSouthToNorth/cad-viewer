@@ -10,10 +10,6 @@ import { AcTrEntity } from '../src/object/AcTrEntity'
 import { AcTrLine } from '../src/object/AcTrLine'
 import { AcTrRenderContext } from '../src/renderer/AcTrRenderContext'
 import { AcTrSubEntityTraitsUtil } from '../src/util'
-import {
-  HIGHLIGHT_HOVER_COLOR,
-  HIGHLIGHT_SELECT_COLOR
-} from '../src/util/AcTrMaterialUtil'
 import { getObjectUserData } from '../src/util/AcTrObjectUserData'
 
 const defaultTraits = AcTrSubEntityTraitsUtil.createDefaultTraits()
@@ -47,7 +43,7 @@ function findBatchedLine(group: AcTrBatchedGroup): AcTrBatchedLine | undefined {
 }
 
 describe('AcTrBatchedGroup slot-mask highlight', () => {
-  it('writes slotId when batching line geometry', () => {
+  it('writes slotId and lineDistance when batching line geometry', () => {
     const group = new AcTrBatchedGroup()
     group.addEntity(createBatchedLineEntity('line-1'))
 
@@ -56,6 +52,12 @@ describe('AcTrBatchedGroup slot-mask highlight', () => {
     const slotId = batchedLine!.geometry.getAttribute(BATCH_SLOT_ID_ATTRIBUTE)
     expect(slotId).toBeDefined()
     expect(slotId.getX(0)).toBe(0)
+    // Every packed line now carries per-entity cumulative distances so the
+    // selection-dash shader can discard highlighted fragments.
+    const lineDistance = batchedLine!.geometry.getAttribute('lineDistance')
+    expect(lineDistance).toBeDefined()
+    expect(lineDistance.getX(0)).toBe(0)
+    expect(lineDistance.getX(1)).toBe(100)
   })
 
   it('selects batched entities without creating overlay drawables', () => {
@@ -132,7 +134,7 @@ describe('AcTrBatchedGroup slot-mask highlight', () => {
     expect(secondTexture.image.data).toBe(firstData)
   })
 
-  it('uses hover highlight color for unbatched drawables', () => {
+  it('keeps the original material on hovered unbatched drawables', () => {
     const group = new AcTrBatchedGroup()
     const geometry = new THREE.BufferGeometry()
     geometry.setAttribute(
@@ -154,12 +156,13 @@ describe('AcTrBatchedGroup slot-mask highlight', () => {
     const clonedLine = [...group.children[0].children].find(
       child => child instanceof THREE.Line
     ) as THREE.Line
-    expect(
-      (clonedLine.material as THREE.LineBasicMaterial).color.getHex()
-    ).toBe(HIGHLIGHT_HOVER_COLOR.getHex())
+    // Unbatched drawables are no longer tinted: the original material stays
+    // in place and selection feedback comes from vertex markers instead.
+    expect(clonedLine.material).toBe(material)
+    expect(getObjectUserData(clonedLine).originalMaterial).toBeUndefined()
   })
 
-  it('keeps hover highlight after unselect when both were active', () => {
+  it('keeps the original material after unselect when select and hover were both active', () => {
     const group = new AcTrBatchedGroup()
     const geometry = new THREE.BufferGeometry()
     geometry.setAttribute(
@@ -183,12 +186,11 @@ describe('AcTrBatchedGroup slot-mask highlight', () => {
     const clonedLine = [...group.children[0].children].find(
       child => child instanceof THREE.Line
     ) as THREE.Line
-    expect(
-      (clonedLine.material as THREE.LineBasicMaterial).color.getHex()
-    ).toBe(HIGHLIGHT_HOVER_COLOR.getHex())
+    expect(clonedLine.material).toBe(material)
+    expect(getObjectUserData(clonedLine).originalMaterial).toBeUndefined()
   })
 
-  it('uses in-place material swap for unbatched drawables', () => {
+  it('never swaps materials for unbatched selected drawables', () => {
     const group = new AcTrBatchedGroup()
     const geometry = new THREE.BufferGeometry()
     geometry.setAttribute(
@@ -214,13 +216,10 @@ describe('AcTrBatchedGroup slot-mask highlight', () => {
       child => child instanceof THREE.Line
     ) as THREE.Line
     expect(clonedLine).toBeDefined()
-    expect(getObjectUserData(clonedLine).originalMaterial).toBe(material)
-    expect(
-      (clonedLine.material as THREE.LineBasicMaterial).color.getHex()
-    ).toBe(HIGHLIGHT_SELECT_COLOR.getHex())
+    expect(clonedLine.material).toBe(material)
+    expect(getObjectUserData(clonedLine).originalMaterial).toBeUndefined()
 
     group.unselect('unbatched-1')
     expect(clonedLine.material).toBe(material)
-    expect(getObjectUserData(clonedLine).originalMaterial).toBeUndefined()
   })
 })

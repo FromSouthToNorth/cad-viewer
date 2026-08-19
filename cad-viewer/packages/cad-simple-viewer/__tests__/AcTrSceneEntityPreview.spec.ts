@@ -6,7 +6,12 @@ jest.mock('@mlightcad/three-renderer', () => ({
   },
   AcTrHtmlTransientManager: class AcTrHtmlTransientManager {},
   AcTrPreviewOverlayManager: class AcTrPreviewOverlayManager {},
-  AcTrTransientManager: class AcTrTransientManager {}
+  AcTrTransientManager: class AcTrTransientManager {},
+  AcTrVertexMarkerOverlay: class AcTrVertexMarkerOverlay {
+    internalObject = new THREE.Group()
+    setPoints() {}
+    clear() {}
+  }
 }))
 
 import { AcTrLayout } from '../src/view/AcTrLayout'

@@ -47,6 +47,7 @@ import {
   AcEdGripManager,
   AcEdMTextEditor,
   AcEdOpenMode,
+  AcEdSelectionVertexMarkers,
   AcEdSpatialQueryResultItem,
   AcEdSpatialQueryResultItemEx,
   AcEdViewMode,
@@ -67,6 +68,7 @@ import {
   trySelectReviewOverlaysByBox
 } from './AcEdReviewOverlayPick'
 import { AcEdViewKeyHandler } from './AcEdViewKeyHandler'
+import { shouldRefreshCameraDepthRange } from './AcTrDepthRangeUtil'
 import {
   shouldExtendBboxForDirectEntity,
   tryBuildDirectEntityMetas
@@ -82,7 +84,6 @@ import { AcTrLayerAppearanceController } from './AcTrLayerAppearanceController'
 import { AcTrLayout } from './AcTrLayout'
 import { AcTrLayoutView } from './AcTrLayoutView'
 import { AcTrLayoutViewManager } from './AcTrLayoutViewManager'
-import { shouldRefreshCameraDepthRange } from './AcTrDepthRangeUtil'
 import { sortPickResults } from './AcTrPickResultUtil'
 import { AcTrProgressiveOpenFitController } from './AcTrProgressiveOpenFitController'
 import { AcTrScene } from './AcTrScene'
@@ -255,6 +256,8 @@ export class AcTrView2d extends AcEdBaseView {
   private _pendingGeometryJobs = 0
   /** Grip point display and drag editing (Write mode only). */
   private _gripManager: AcEdGripManager
+  /** Screen-space vertex markers driven by the selection/hover set. */
+  private _selectionVertexMarkers: AcEdSelectionVertexMarkers
   /** Global keyboard shortcuts for the view (undo/redo, erase, etc.). */
   private _keyHandler: AcEdViewKeyHandler
 
@@ -317,6 +320,7 @@ export class AcTrView2d extends AcEdBaseView {
 
     super(renderer.domElement, container)
     this._gripManager = new AcEdGripManager(this)
+    this._selectionVertexMarkers = new AcEdSelectionVertexMarkers(this)
     this._keyHandler = new AcEdViewKeyHandler(this)
     if (options.calculateSizeCallback) {
       this.setCalculateSizeCallback(options.calculateSizeCallback)
@@ -622,6 +626,11 @@ export class AcTrView2d extends AcEdBaseView {
   /** Grip point manager for the view (Write mode only). */
   get gripManager() {
     return this._gripManager
+  }
+
+  /** Screen-space selection/hover vertex marker driver for the view. */
+  get selectionVertexMarkers() {
+    return this._selectionVertexMarkers
   }
 
   /**
@@ -1857,6 +1866,7 @@ export class AcTrView2d extends AcEdBaseView {
         this.highlight(selectedIds)
       }
       this._gripManager.refresh()
+      this._selectionVertexMarkers.refresh()
     })()
     this._isDirty = true
     // Not sure why texture for image entity isn't updated even if 'isDirty' flag is already set to true.

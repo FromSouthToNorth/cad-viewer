@@ -1,11 +1,12 @@
-import { AcDbObjectId, AcGeBox2d, AcGeBox3d, log } from '@mlightcad/data-model'
+import { AcDbObjectId, AcGeBox2d, AcGeBox3d, AcGePoint3dLike, log } from '@mlightcad/data-model'
 import {
   AcTrDirectEntityMeta,
   AcTrEntity,
   AcTrEntityPreview,
   AcTrHtmlTransientManager,
   AcTrPreviewOverlayManager,
-  AcTrTransientManager
+  AcTrTransientManager,
+  AcTrVertexMarkerOverlay
 } from '@mlightcad/three-renderer'
 import * as THREE from 'three'
 
@@ -102,6 +103,8 @@ export class AcTrScene {
   private _htmlTransientManager: AcTrHtmlTransientManager
   /** Batched preview overlay manager */
   private _previewOverlayManager: AcTrPreviewOverlayManager
+  /** Screen-space vertex markers for the current selection/hover set */
+  private _selectionMarkerOverlay: AcTrVertexMarkerOverlay
 
   /**
    * Creates a new CAD scene instance.
@@ -113,6 +116,8 @@ export class AcTrScene {
     this._transientManager = new AcTrTransientManager(this._scene)
     this._htmlTransientManager = new AcTrHtmlTransientManager(this._scene)
     this._previewOverlayManager = new AcTrPreviewOverlayManager(this._scene)
+    this._selectionMarkerOverlay = new AcTrVertexMarkerOverlay()
+    this._scene.add(this._selectionMarkerOverlay.internalObject)
     this._layers = new Map()
     this._layouts = new Map()
     this._activeLayoutBtrId = ''
@@ -302,11 +307,31 @@ export class AcTrScene {
     this._transientManager.clear()
     this._htmlTransientManager.clear()
     this._previewOverlayManager.clear()
+    this._selectionMarkerOverlay.clear()
     this._scene.clear()
     this._transientManager = new AcTrTransientManager(this._scene)
     this._htmlTransientManager = new AcTrHtmlTransientManager(this._scene)
     this._previewOverlayManager = new AcTrPreviewOverlayManager(this._scene)
+    this._selectionMarkerOverlay = new AcTrVertexMarkerOverlay()
+    this._scene.add(this._selectionMarkerOverlay.internalObject)
     return this
+  }
+
+  /**
+   * Replaces the selection/hover vertex markers with the given world-space
+   * points.
+   *
+   * @param points - World-space grip points of selected and hovered entities.
+   */
+  setSelectionVertexMarkers(points: AcGePoint3dLike[]) {
+    this._selectionMarkerOverlay.setPoints(points)
+  }
+
+  /**
+   * Removes all selection/hover vertex markers.
+   */
+  clearSelectionVertexMarkers() {
+    this._selectionMarkerOverlay.clear()
   }
 
   /**

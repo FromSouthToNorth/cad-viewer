@@ -22,7 +22,10 @@ import {
   resolveReservedCount
 } from './AcTrBatchedMixin'
 import { syncBatchDrawVisibilityAfterOptimize } from './drawVisibility'
-import { ensureSlotIdAttribute, writeSlotIdRange } from './highlight'
+import {
+  ensureInstancedSlotIdAttribute,
+  writeInstancedSlotIdRange
+} from './highlight'
 
 type AcTrBatchedLine2GeometryInfo = AcTrVertexBatchGeometryInfo
 
@@ -93,9 +96,37 @@ export class AcTrBatchedLine2 extends AcTrBatchedLine2Base {
     ;(this.geometry as LineSegmentsGeometry).setPositions(
       new Float32Array(this._maxSegmentCount * 6)
     )
-    ensureSlotIdAttribute(this.geometry, this._maxSegmentCount)
+    ensureInstancedSlotIdAttribute(this.geometry, this._maxSegmentCount)
+    this._ensureInstanceDistanceAttributes()
     this._copyStaticAttributes(reference)
     this._geometryInitialized = true
+  }
+
+  /**
+   * Allocates per-instance cumulative distance attributes used by the
+   * selection-dash shader, preserving existing values on regrowth.
+   */
+  private _ensureInstanceDistanceAttributes() {
+    const geometry = this.geometry
+    for (const name of [
+      'instanceDistanceStart',
+      'instanceDistanceEnd'
+    ] as const) {
+      const existing = geometry.getAttribute(name) as
+        | THREE.InstancedBufferAttribute
+        | undefined
+      if (existing && existing.count >= this._maxSegmentCount) {
+        continue
+      }
+      const attribute = new THREE.InstancedBufferAttribute(
+        new Float32Array(this._maxSegmentCount),
+        1
+      )
+      if (existing) {
+        attribute.array.set(existing.array.subarray(0, existing.count))
+      }
+      geometry.setAttribute(name, attribute)
+    }
   }
 
   private _copyStaticAttributes(
@@ -112,7 +143,9 @@ export class AcTrBatchedLine2 extends AcTrBatchedLine2Base {
       if (
         key === 'instanceStart' ||
         key === 'instanceEnd' ||
-        key === 'slotId'
+        key === 'slotId' ||
+        key === 'instanceDistanceStart' ||
+        key === 'instanceDistanceEnd'
       ) {
         continue
       }
@@ -178,6 +211,9 @@ export class AcTrBatchedLine2 extends AcTrBatchedLine2Base {
     worldOffset: THREE.Vector3 = new THREE.Vector3()
   ) {
     this.rebaseGeometryInPlace(geometry, worldOffset)
+    // Per-entity cumulative distances feed the selection-dash shader; keep the
+    // phase entity-local like thin-line `lineDistance`.
+    AcTrBatchedLine2.computeInstanceDistances(geometry)
     this._initializeGeometry(geometry)
     this._validateGeometry(geometry)
     this._resizeSpaceIfNeeded(geometry)
@@ -267,6 +303,51 @@ export class AcTrBatchedLine2 extends AcTrBatchedLine2Base {
   }
 
   /**
+   * Computes per-instance cumulative distances for one entity's segments.
+   *
+   * `instanceDistanceStart/End` follow three's `USE_DASH` attribute convention
+   * so the highlight shader can dash highlighted slots without enabling the
+   * material-global dash path. Distances restart from zero per geometry, which
+   * keeps the dash phase entity-local.
+   *
+   * @param geometry - Source wide-line geometry mutated in place.
+   */
+  private static computeInstanceDistances(geometry: LineSegmentsGeometry) {
+    const start = geometry.getAttribute('instanceStart') as
+      | THREE.BufferAttribute
+      | THREE.InterleavedBufferAttribute
+      | undefined
+    const end = geometry.getAttribute('instanceEnd') as
+      | THREE.BufferAttribute
+      | THREE.InterleavedBufferAttribute
+      | undefined
+    if (!start || !end || start.count === 0) {
+      geometry.deleteAttribute('instanceDistanceStart')
+      geometry.deleteAttribute('instanceDistanceEnd')
+      return
+    }
+
+    const distanceStart = new Float32Array(start.count)
+    const distanceEnd = new Float32Array(start.count)
+    let accumulated = 0
+    for (let i = 0; i < start.count; i++) {
+      distanceStart[i] = accumulated
+      _segmentStart.fromBufferAttribute(start, i)
+      _segmentEnd.fromBufferAttribute(end, i)
+      accumulated += _segmentStart.distanceTo(_segmentEnd)
+      distanceEnd[i] = accumulated
+    }
+    geometry.setAttribute(
+      'instanceDistanceStart',
+      new THREE.InstancedBufferAttribute(distanceStart, 1)
+    )
+    geometry.setAttribute(
+      'instanceDistanceEnd',
+      new THREE.InstancedBufferAttribute(distanceEnd, 1)
+    )
+  }
+
+  /**
    * Assigns entity metadata for a packed geometry id.
    */
   setGeometryInfo(geometryId: number, userData: AcTrBatchGeometryUserData) {
@@ -285,6 +366,9 @@ export class AcTrBatchedLine2 extends AcTrBatchedLine2Base {
     if (geometryId >= this._geometryCount) {
       throw new Error('AcTrBatchedLine2: Maximum geometry count reached.')
     }
+    if (!geometry.hasAttribute('instanceDistanceStart')) {
+      AcTrBatchedLine2.computeInstanceDistances(geometry)
+    }
     this._validateGeometry(geometry)
 
     const geometryInfo = this._geometryInfo[geometryId]
@@ -299,10 +383,18 @@ export class AcTrBatchedLine2 extends AcTrBatchedLine2Base {
     const dstEnd = this.geometry.getAttribute('instanceEnd')
     const srcStart = geometry.getAttribute('instanceStart')
     const srcEnd = geometry.getAttribute('instanceEnd')
+    const srcDistanceStart = geometry.getAttribute('instanceDistanceStart')
+    const srcDistanceEnd = geometry.getAttribute('instanceDistanceEnd')
     const segmentStart = geometryInfo.vertexStart
+
+    this._ensureInstanceDistanceAttributes()
+    const dstDistanceStart = this.geometry.getAttribute('instanceDistanceStart')
+    const dstDistanceEnd = this.geometry.getAttribute('instanceDistanceEnd')
 
     copyAttributeData(srcStart, dstStart, segmentStart)
     copyAttributeData(srcEnd, dstEnd, segmentStart)
+    copyAttributeData(srcDistanceStart, dstDistanceStart, segmentStart)
+    copyAttributeData(srcDistanceEnd, dstDistanceEnd, segmentStart)
 
     for (
       let i = segmentCount, l = geometryInfo.reservedVertexCount;
@@ -314,15 +406,19 @@ export class AcTrBatchedLine2 extends AcTrBatchedLine2Base {
         dstStart.setComponent(index, c, 0)
         dstEnd.setComponent(index, c, 0)
       }
+      dstDistanceStart.setComponent(index, 0, 0)
+      dstDistanceEnd.setComponent(index, 0, 0)
     }
 
     dstStart.needsUpdate = true
     dstEnd.needsUpdate = true
+    dstDistanceStart.needsUpdate = true
+    dstDistanceEnd.needsUpdate = true
 
     geometryInfo.vertexCount = segmentCount
     geometryInfo.boundingBox = null
 
-    writeSlotIdRange(
+    writeInstancedSlotIdRange(
       this.geometry,
       segmentStart,
       geometryInfo.reservedVertexCount,
@@ -353,17 +449,23 @@ export class AcTrBatchedLine2 extends AcTrBatchedLine2Base {
           oldStart * 6,
           (oldStart + count) * 6
         )
-        const slotIdAttr = this.geometry.getAttribute('slotId') as
-          | THREE.BufferAttribute
-          | undefined
-        if (slotIdAttr) {
-          slotIdAttr.array.copyWithin(
-            nextSegmentStart,
-            oldStart,
-            oldStart + count
-          )
-          slotIdAttr.addUpdateRange(nextSegmentStart, count)
-          slotIdAttr.needsUpdate = true
+        for (const name of [
+          'slotId',
+          'instanceDistanceStart',
+          'instanceDistanceEnd'
+        ]) {
+          const attribute = this.geometry.getAttribute(name) as
+            | THREE.BufferAttribute
+            | undefined
+          if (attribute) {
+            attribute.array.copyWithin(
+              nextSegmentStart,
+              oldStart,
+              oldStart + count
+            )
+            attribute.addUpdateRange(nextSegmentStart, count)
+            attribute.needsUpdate = true
+          }
         }
       }
       info.vertexStart = nextSegmentStart
@@ -440,6 +542,9 @@ export class AcTrBatchedLine2 extends AcTrBatchedLine2Base {
   setGeometrySize(maxSegmentCount: number) {
     const oldGeometry = this.geometry as LineSegmentsGeometry
     const oldPacked = this._getPackedSegmentArray()
+    const oldSlotId = oldGeometry.getAttribute('slotId')
+    const oldDistanceStart = oldGeometry.getAttribute('instanceDistanceStart')
+    const oldDistanceEnd = oldGeometry.getAttribute('instanceDistanceEnd')
 
     this._maxSegmentCount = maxSegmentCount
     this.geometry = new LineSegmentsGeometry()
@@ -450,6 +555,22 @@ export class AcTrBatchedLine2 extends AcTrBatchedLine2Base {
     const newPacked = this._getPackedSegmentArray()
     copyArrayContents(oldPacked, newPacked)
     this._copyStaticAttributes(oldGeometry)
+    const newSlotId = ensureInstancedSlotIdAttribute(
+      this.geometry,
+      maxSegmentCount
+    )
+    if (oldSlotId) {
+      copyArrayContents(oldSlotId.array, newSlotId.array)
+    }
+    this._ensureInstanceDistanceAttributes()
+    const newDistanceStart = this.geometry.getAttribute('instanceDistanceStart')
+    const newDistanceEnd = this.geometry.getAttribute('instanceDistanceEnd')
+    if (oldDistanceStart) {
+      copyArrayContents(oldDistanceStart.array, newDistanceStart.array)
+    }
+    if (oldDistanceEnd) {
+      copyArrayContents(oldDistanceEnd.array, newDistanceEnd.array)
+    }
     this._geometryInitialized = true
     this._syncDrawRange()
     oldGeometry.dispose()
