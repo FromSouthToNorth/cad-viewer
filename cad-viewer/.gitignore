@@ -10,6 +10,14 @@ tsconfig.tsbuildinfo
 
 # generated bench artifacts
 packages/cad-viewer-example/bench/out
+tools/bench/fixtures/
+tools/bench/stall.pid
+
+# private maintainer clone; never commit
+packages/dwg-converter
+
+# test coverage
+coverage/
 
 # dependencies
 node_modules

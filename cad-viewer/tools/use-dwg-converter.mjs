@@ -1,9 +1,8 @@
 #!/usr/bin/env node
 /**
  * Switch example apps / CLI from @mlightcad/libredwg-converter (GPL)
- * to the proprietary @mlight-cad/dwg-converter (local realdwg-web path).
- * Also repoints the @mlightcad/data-model pnpm override to the local
- * realdwg-web checkout.
+ * to the proprietary @mlight-cad/dwg-converter (private maintainer clone
+ * at packages/dwg-converter, outside the pnpm workspace / public lockfile).
  *
  * `@mlightcad/cad-simple-viewer` no longer depends on or registers a DWG
  * converter — hosts (examples, CLI) own that opt-in.
@@ -12,17 +11,62 @@
  *   node tools/use-dwg-converter.mjs
  *   pnpm use:dwg-converter
  */
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const toolsDir = dirname(fileURLToPath(import.meta.url))
 const rootDir = join(toolsDir, '..')
 
-const DWG_CONVERTER_VERSION =
-  '../../../realdwg-web/packages/dwg-converter'
+const DWG_CONVERTER_VERSION = 'link:../dwg-converter'
 
-const DATA_MODEL_VERSION = '../../../realdwg-web/packages/data-model'
+const FROM_PKG = '@mlightcad/libredwg-converter'
+const TO_PKG = '@mlight-cad/dwg-converter'
+const CODEPAGE_SRC = `./node_modules/${TO_PKG}/dist/dwg-codepage-*.bin`
+
+/**
+ * Insert dwg-codepage-*.bin viteStaticCopy target after the converter
+ * worker target. Uses line splitting so CRLF/LF both work.
+ */
+function ensureCodepageCopyTarget(content) {
+  if (content.includes('dwg-codepage-*.bin')) {
+    return content
+  }
+
+  const nl = content.includes('\r\n') ? '\r\n' : '\n'
+  const lines = content.split(/\r?\n/)
+  const workerLineIdx = lines.findIndex(line =>
+    line.includes(`${TO_PKG}/dist/*-worker.js`)
+  )
+  if (workerLineIdx === -1) {
+    console.warn('  could not locate worker copy target; add dwg-codepage-*.bin manually')
+    return content
+  }
+
+  let closeIdx = -1
+  for (let i = workerLineIdx; i < lines.length; i++) {
+    if (/^[ \t]*\}$/.test(lines[i])) {
+      closeIdx = i
+      break
+    }
+  }
+  if (closeIdx === -1) {
+    return content
+  }
+
+  const indent = lines[closeIdx].match(/^[ \t]*/)[0]
+  const propIndent = `${indent}  `
+  lines[closeIdx] = `${indent}},`
+  lines.splice(
+    closeIdx + 1,
+    0,
+    `${indent}{`,
+    `${propIndent}src: '${CODEPAGE_SRC}',`,
+    `${propIndent}dest: 'assets'`,
+    `${indent}}`
+  )
+  return lines.join(nl)
+}
 
 function replaceLibreDwgParserWorkerFile(content) {
   if (
@@ -138,6 +182,11 @@ const targets = [
     transform: replacePackageDep
   },
   {
+    path: join(rootDir, 'packages', 'realdwg-web-example', 'package.json'),
+    label: 'realdwg-web-example/package.json',
+    transform: replacePackageDep
+  },
+  {
     path: join(
       rootDir,
       'packages',
@@ -151,6 +200,20 @@ const targets = [
     path: join(rootDir, 'packages', 'cad-viewer-example', 'vite.config.ts'),
     label: 'cad-viewer-example/vite.config.ts',
     transform: replaceViteLibreDwg
+  },
+  {
+    path: join(rootDir, 'packages', 'realdwg-web-example', 'vite.config.ts'),
+    label: 'realdwg-web-example/vite.config.ts',
+    transform(content) {
+      if (content.includes(TO_PKG)) {
+        console.log('  already using @mlight-cad/dwg-converter')
+        return null
+      }
+      if (!content.includes(FROM_PKG)) {
+        throw new Error('No libredwg-converter reference found in vite.config.ts')
+      }
+      return ensureCodepageCopyTarget(content.replaceAll(FROM_PKG, TO_PKG))
+    }
   },
   {
     path: join(
@@ -264,23 +327,40 @@ const targets = [
     }
   },
   {
-    path: join(rootDir, 'pnpm-workspace.yaml'),
-    label: 'pnpm-workspace.yaml',
+    path: join(rootDir, 'packages', 'realdwg-web-example', 'src', 'main.ts'),
+    label: 'realdwg-web-example/src/main.ts',
     transform(content) {
-      if (content.includes(`'@mlightcad/data-model': '${DATA_MODEL_VERSION}'`)) {
-        console.log('  already using local @mlightcad/data-model override')
+      if (
+        content.includes('AcDbDwgConverter') &&
+        !content.includes('AcDbLibreDwgConverter')
+      ) {
+        console.log('  already using AcDbDwgConverter')
         return null
       }
-
-      const next = content.replace(
-        /(['"]?@mlightcad\/data-model['"]?\s*:\s*)(['"]).*?\2/,
-        `$1'${DATA_MODEL_VERSION}'`
-      )
-
+      const next = content
+        .replaceAll(FROM_PKG, TO_PKG)
+        .replaceAll('AcDbLibreDwgConverter', 'AcDbDwgConverter')
+        .replaceAll('libredwg-parser-worker.js', 'dwg-parser-worker.js')
       if (next === content) {
-        throw new Error(
-          'No @mlightcad/data-model override found in pnpm-workspace.yaml'
-        )
+        throw new Error('No libredwg references found in realdwg-web-example main.ts')
+      }
+      return next
+    }
+  },
+  {
+    path: join(rootDir, 'packages', 'dwg-converter', 'package.json'),
+    label: 'dwg-converter/package.json',
+    optional: true,
+    transform(content) {
+      // dwg-converter is outside the pnpm workspace / public lockfile, so it
+      // cannot use workspace:* — point it at the in-repo data-model build.
+      const next = content.replace(
+        /"(@mlightcad\/data-model)"\s*:\s*"(?!link:\.\.\/data-model)[^"]*"/g,
+        '"$1": "link:../data-model"'
+      )
+      if (next === content) {
+        console.log('  already using link:../data-model')
+        return null
       }
       return next
     }
@@ -294,6 +374,9 @@ function main() {
 
   let changed = 0
   for (const target of targets) {
+    if (target.optional && !existsSync(target.path)) {
+      continue
+    }
     console.log(`\n→ ${target.label}`)
     const original = readFileSync(target.path, 'utf8')
     const updated = target.transform(original)

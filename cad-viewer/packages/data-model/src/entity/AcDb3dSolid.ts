@@ -279,7 +279,7 @@ export class AcDb3dSolid extends AcDbEntity {
    * Rebuilds `_wireframe` / `_points` from SAB bytes (preferred) or SAT text.
    */
   private rebuildGeometryCaches() {
-    let wireframe = new Float64Array(0)
+    let wireframe: Float64Array = new Float64Array(0)
     if (this._sabBytes && this._sabBytes.length > 0) {
       wireframe =
         acdbAcisWireframeSegmentsFromSab(this._sabBytes) ?? new Float64Array(0)

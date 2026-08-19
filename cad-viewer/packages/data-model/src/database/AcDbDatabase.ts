@@ -2354,7 +2354,7 @@ export class AcDbDatabase extends AcDbObject {
     optionsOrThumbnail:
       | boolean
       | { saveThumbnailImage?: boolean; format?: 'ascii' | 'binary' } = false
-  ): string | Uint8Array {
+  ): string | Uint8Array<ArrayBuffer> {
     this.ensureDatabaseDefaults()
     if (
       this._layerFilters.root.getNestedFilters().length > 0 &&

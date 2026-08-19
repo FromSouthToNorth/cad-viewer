@@ -8,8 +8,8 @@ import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
-import { AcTrRenderContext } from '../renderer/AcTrRenderContext'
 import { RTE_REBASE_THRESHOLD } from '../draw/AcTrBatchDrawPolicy'
+import { AcTrRenderContext } from '../renderer/AcTrRenderContext'
 import { AcTrBufferGeometryUtil } from '../util'
 import { AcTrPolygon } from './AcTrPolygon'
 

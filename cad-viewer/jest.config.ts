@@ -34,7 +34,13 @@ const config: Config = {
     '^.+\\.(ts|tsx)$': [
       'ts-jest',
       {
-        tsconfig: '<rootDir>/tsconfig.jest.json'
+        tsconfig: '<rootDir>/tsconfig.jest.json',
+        diagnostics: {
+          // data-model sources carry @ts-expect-error directives that are only
+          // "used" under the package tsconfig (noUnusedParameters). The jest
+          // tsconfig disables those checks, making the directives unused here.
+          ignoreCodes: [2578]
+        }
       }
     ],
     '^.+\\.js$': [
@@ -54,6 +60,14 @@ const config: Config = {
     '/__tests__/helpers/'
   ],
   moduleNameMapper: {
+    '^@mlightcad/common$': '<rootDir>/packages/common/src/index.ts',
+    '^@mlightcad/geometry-engine$':
+      '<rootDir>/packages/geometry-engine/src/index.ts',
+    '^@mlightcad/graphic-interface$':
+      '<rootDir>/packages/graphic-interface/src/index.ts',
+    '^@mlightcad/data-model$': '<rootDir>/packages/data-model/src/index.ts',
+    '^@mlightcad/libredwg-converter$':
+      '<rootDir>/packages/libredwg-converter/src/index.ts',
     '^lodash-es$': lodashCjsModule,
     '^three$': '<rootDir>/packages/three-renderer/node_modules/three/build/three.cjs',
     '^three/examples/jsm/lines/LineMaterial\\.js$':

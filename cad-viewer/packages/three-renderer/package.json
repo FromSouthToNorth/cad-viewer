@@ -40,7 +40,7 @@
     "lint:fix": "eslint --fix --quiet src/"
   },
   "devDependencies": {
-    "@mlightcad/data-model": "^1.13.0",
+    "@mlightcad/data-model": "workspace:^",
     "@mlightcad/mtext-renderer": "^0.12.4",
     "@types/three": "^0.172.0",
     "three": "^0.172.0"

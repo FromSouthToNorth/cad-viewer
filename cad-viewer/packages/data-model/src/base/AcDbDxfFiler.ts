@@ -212,7 +212,7 @@ export class AcDbDxfFiler {
   }
 
   /** Finalize binary DXF bytes (includes magic prefix). */
-  toBinary(): Uint8Array {
+  toBinary(): Uint8Array<ArrayBuffer> {
     this.assertWriteMode()
     if (this._outputFormat !== 'binary') {
       throw new Error('Filer is not in binary output mode')

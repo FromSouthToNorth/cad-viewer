@@ -56,7 +56,7 @@ export function acdbIsBinaryDxf(data: Uint8Array): boolean {
  * Peek `$ACADVER` / `$DWGCODEPAGE` from the HEADER section without decoding
  * the whole file. Uses 64 KiB UTF-8 chunks (same strategy as AcDbDxfParser).
  */
-export function acdbPeekDxfHeaderInfo(buffer: ArrayBuffer): AcDbDxfHeaderInfo {
+export function acdbPeekDxfHeaderInfo(buffer: ArrayBufferLike): AcDbDxfHeaderInfo {
   const chunkSize = 64 * 1024
   const decoder = new TextDecoder('utf-8')
   let offset = 0

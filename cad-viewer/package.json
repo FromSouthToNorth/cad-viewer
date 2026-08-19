@@ -19,6 +19,7 @@
     "clean": "nx run-many -t clean",
     "copy:workers": "pnpm -r --filter \"./packages/**\" run copy:workers",
     "dev": "nx run @mlightcad/cad-viewer-example:dev",
+    "dev:realdwg": "nx run @mlightcad/realdwg-web-example:dev",
     "dev:simple": "nx run @mlightcad/cad-simple-viewer-example:dev",
     "docs:build": "typedoc --skipErrorChecking",
     "docs:site:prepare": "node tools/prepare-docs-site.mjs",
@@ -75,7 +76,8 @@
     "typescript": "^5.5.2",
     "typescript-eslint": "^8.4.0",
     "vite": "^6.4.3",
-    "vite-plugin-static-copy": "^4.1.1"
+    "vite-plugin-static-copy": "^4.1.1",
+    "vite-plugin-strip-comments": "^0.0.10"
   },
   "lint-staged": {
     "*.{ts,js,vue}": [

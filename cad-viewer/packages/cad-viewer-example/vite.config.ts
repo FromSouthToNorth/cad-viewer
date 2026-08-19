@@ -16,10 +16,7 @@ import {
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const VIEWER_RUNTIME_SRC = '../cad-html-plugin/dist/viewer-runtime.iife.js'
-const LOCAL_DATA_MODEL_LIB = resolve(
-  __dirname,
-  '../../../realdwg-web/packages/data-model/lib'
-)
+const LOCAL_DATA_MODEL_LIB = resolve(__dirname, '../data-model/lib')
 const LOCAL_DATA_MODEL_ENTRY = resolve(LOCAL_DATA_MODEL_LIB, 'index.js')
 const LOCAL_UI_COMPONENTS_SRC = resolve(
   __dirname,

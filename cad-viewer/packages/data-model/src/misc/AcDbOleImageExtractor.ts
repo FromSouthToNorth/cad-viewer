@@ -22,6 +22,15 @@ const DIRECTORY_ENTRY_SIZE = 128
 const MAX_STREAM_BYTES = 64 * 1024 * 1024
 
 /**
+ * OLE payloads always come from parsed file bytes backed by a plain
+ * `ArrayBuffer` (never a `SharedArrayBuffer`); re-typing the view is safe and
+ * yields a valid `BlobPart` under TS 5.7+ generic TypedArrays.
+ */
+function asBlobPart(data: Uint8Array): Uint8Array<ArrayBuffer> {
+  return data as Uint8Array<ArrayBuffer>
+}
+
+/**
  * Attempts to extract an image blob from OLE binary data.
  *
  * @param data - Raw OLE payload from {@link AcDbOleFrame.getOleObject}.
@@ -203,7 +212,7 @@ function findBmpBlob(data: Uint8Array): Blob | undefined {
     if (fileSize < 14 || fileSize > data.length - i) continue
     const dibOffset = view.getUint32(10, true)
     if (dibOffset < 14 || dibOffset >= fileSize) continue
-    return new Blob([data.subarray(i, i + fileSize)], { type: 'image/bmp' })
+    return new Blob([asBlobPart(data.subarray(i, i + fileSize))], { type: 'image/bmp' })
   }
   return undefined
 }
@@ -228,10 +237,10 @@ function findPngBlob(data: Uint8Array): Blob | undefined {
       data[i + 7] === 0x44
     ) {
       const end = i + 12
-      return new Blob([data.subarray(start, end)], { type: 'image/png' })
+      return new Blob([asBlobPart(data.subarray(start, end))], { type: 'image/png' })
     }
   }
-  return new Blob([data.subarray(start)], { type: 'image/png' })
+  return new Blob([asBlobPart(data.subarray(start))], { type: 'image/png' })
 }
 
 /**
@@ -247,7 +256,7 @@ function findJpegBlob(data: Uint8Array): Blob | undefined {
   if (start < 0) return undefined
   for (let i = start + 3; i + 1 < data.length; i++) {
     if (data[i] === 0xff && data[i + 1] === 0xd9) {
-      return new Blob([data.subarray(start, i + 2)], { type: 'image/jpeg' })
+      return new Blob([asBlobPart(data.subarray(start, i + 2))], { type: 'image/jpeg' })
     }
   }
   return undefined
@@ -267,10 +276,10 @@ function findGifBlob(data: Uint8Array): Blob | undefined {
   if (start < 0) return undefined
   for (let i = start + 6; i < data.length; i++) {
     if (data[i] === 0x3b) {
-      return new Blob([data.subarray(start, i + 1)], { type: 'image/gif' })
+      return new Blob([asBlobPart(data.subarray(start, i + 1))], { type: 'image/gif' })
     }
   }
-  return new Blob([data.subarray(start)], { type: 'image/gif' })
+  return new Blob([asBlobPart(data.subarray(start))], { type: 'image/gif' })
 }
 
 /**

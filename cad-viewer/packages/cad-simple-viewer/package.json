@@ -42,7 +42,7 @@
     "lint:fix": "eslint --fix --quiet src/"
   },
   "devDependencies": {
-    "@mlightcad/data-model": "^1.13.0",
+    "@mlightcad/data-model": "workspace:^",
     "@mlightcad/mtext-input-box": "^0.2.23",
     "@mlightcad/mtext-renderer": "^0.12.4",
     "@mlightcad/three-renderer": "workspace:*",

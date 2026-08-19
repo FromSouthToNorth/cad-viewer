@@ -44,7 +44,7 @@
   },
   "devDependencies": {
     "@mlightcad/cad-simple-viewer": "workspace:*",
-    "@mlightcad/data-model": "^1.13.0",
+    "@mlightcad/data-model": "workspace:^",
     "@mlightcad/mtext-parser": "^1.4.1",
     "@mlightcad/mtext-renderer": "^0.12.4"
   },

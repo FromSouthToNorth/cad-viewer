@@ -8,11 +8,6 @@ allowBuilds:
   unrs-resolver: true
   vue-demi: true
 overrides:
-  '@mlightcad/common': 'link:../realdwg-web/packages/common'
-  '@mlightcad/geometry-engine': 'link:../realdwg-web/packages/geometry-engine'
-  '@mlightcad/graphic-interface': 'link:../realdwg-web/packages/graphic-interface'
-  '@mlightcad/data-model': 'link:../realdwg-web/packages/data-model'
-  '@mlightcad/libredwg-converter': '^3.13.0'
   '@mlightcad/mtext-input-box': '^0.2.23'
   '@mlightcad/mtext-renderer': '^0.12.4'
   '@mlightcad/ribbon': '^0.1.12'
