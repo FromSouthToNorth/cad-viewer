@@ -6,11 +6,16 @@ import ElementPlus from 'element-plus'
 import { createApp } from 'vue'
 
 import App from './App.vue'
+import { initializeLocale } from './locale'
 import { registerLibreDwgConverter } from './registerLibreDwg'
 
 const initApp = () => {
   // Opt into GPL DWG support before the viewer mounts.
   registerLibreDwgConverter(`./assets/${LIBREDWG_PARSER_WORKER_FILE}`)
+
+  // Register example-app messages up front: the upload screen renders
+  // before the viewer is created, so it cannot wait for onViewerCreate.
+  initializeLocale()
 
   const app = createApp(App)
   // Required when Vite aliases `@mlightcad/ui-components` to source: those SFCs

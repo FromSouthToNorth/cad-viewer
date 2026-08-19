@@ -564,11 +564,11 @@ export function resolveAcExHtmlLocale(
 
 /**
  * Detects locale from the browser's language preferences.
- * Returns the first preferred language that maps to a supported locale;
- * defaults to `'en'`.
+ * Returns the first preferred language that maps to a supported locale
+ * (`tr`/`cs`/`zh`); defaults to `'zh'`.
  */
 export function detectBrowserAcExHtmlLocale(): AcExHtmlLocale {
-  if (typeof navigator === 'undefined') return 'en'
+  if (typeof navigator === 'undefined') return 'zh'
 
   const candidates = [
     ...(navigator.languages ?? []),
@@ -577,17 +577,18 @@ export function detectBrowserAcExHtmlLocale(): AcExHtmlLocale {
 
   for (const candidate of candidates) {
     const resolved = resolveAcExHtmlLocale(candidate)
-    if (resolved) return resolved
+    // 'en' is not auto-selected: it falls through to the default 'zh'
+    if (resolved && resolved !== 'en') return resolved
   }
 
-  return 'en'
+  return 'zh'
 }
 
 /**
  * Chooses the initial locale for the offline viewer using, in order:
  * persisted user choice in `localStorage`, then {@link detectBrowserAcExHtmlLocale}.
  *
- * @returns Resolved locale, defaulting to `'en'`.
+ * @returns Resolved locale, defaulting to `'zh'`.
  */
 export function detectAcExHtmlLocale(): AcExHtmlLocale {
   if (typeof localStorage !== 'undefined') {

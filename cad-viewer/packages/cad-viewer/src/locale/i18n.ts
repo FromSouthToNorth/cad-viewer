@@ -19,7 +19,8 @@ import zhDialog from './zh/dialog'
 import zhEnity from './zh/entity'
 import zhMain from './zh/main'
 
-// Get language of browser - use same logic as useLocale
+// Get initial locale - use same logic as useLocale.
+// Priority: stored user choice > browser language (tr/cs) > default 'zh'.
 const getInitialLocale = (): string => {
   const stored = localStorage.getItem('preferred_lang')
   if (stored === 'en' || stored === 'zh' || stored === 'tr' || stored === 'cs')
@@ -27,10 +28,9 @@ const getInitialLocale = (): string => {
 
   const browserLang = navigator.language.toLowerCase()
   const browserLocale = browserLang.substring(0, 2)
-  if (browserLocale === 'zh') return 'zh'
   if (browserLocale === 'tr') return 'tr'
   if (browserLocale === 'cs') return 'cs'
-  return 'en'
+  return 'zh'
 }
 
 const messages = {

@@ -61,11 +61,17 @@ describe('AcExHtmlI18n', () => {
     mockNavigator(['zh-CN', 'en-US'])
     expect(detectBrowserAcExHtmlLocale()).toBe('zh')
 
-    mockNavigator(['en-US', 'zh-CN'])
-    expect(detectBrowserAcExHtmlLocale()).toBe('en')
+    // English is not auto-selected; the next supported language wins
+    mockNavigator(['en-US', 'tr-TR'])
+    expect(detectBrowserAcExHtmlLocale()).toBe('tr')
 
+    // English-only preferences fall back to the default Chinese
+    mockNavigator(['en-US'])
+    expect(detectBrowserAcExHtmlLocale()).toBe('zh')
+
+    // Unsupported languages fall back to the default Chinese
     mockNavigator(['fr-FR'])
-    expect(detectBrowserAcExHtmlLocale()).toBe('en')
+    expect(detectBrowserAcExHtmlLocale()).toBe('zh')
   })
 
   it('prefers stored locale over browser language', () => {

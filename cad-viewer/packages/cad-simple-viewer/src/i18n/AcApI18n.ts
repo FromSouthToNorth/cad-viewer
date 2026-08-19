@@ -62,12 +62,12 @@ export class AcApI18n {
    * @private
    *
    * Stores the currently active locale used by the translation
-   * system. Defaults to `"en"`.
+   * system. Defaults to `"zh"`.
    *
    * This value is used by `t(key, options)` when no locale
    * parameter is provided.
    */
-  private static _currentLocale: AcApLocale = 'en'
+  private static _currentLocale: AcApLocale = 'zh'
 
   /**
    * Return the whole messages map (for vue-i18n initialisation).

@@ -30,13 +30,16 @@ const normalizeLocale = (value: string | null | undefined): AcApLocale => {
 export function useLocale(propLocale?: LocaleProp) {
   const { locale: i18nLocale } = useI18n()
 
-  // Get initial locale from localStorage or browser preference
+  // Get initial locale from localStorage or browser preference.
+  // Priority: stored user choice > browser language (tr/cs) > default 'zh'.
   const getInitialLocale = (): AcApLocale => {
     const stored = localStorage.getItem(STORAGE_KEY)
     if (stored && isSupportedLocale(stored)) return stored
 
     const browserLang = navigator.language.toLowerCase()
-    const browserLocale = normalizeLocale(browserLang.substring(0, 2))
+    const browserPrefix = browserLang.substring(0, 2)
+    const browserLocale: AcApLocale =
+      browserPrefix === 'tr' || browserPrefix === 'cs' ? browserPrefix : 'zh'
     AcApI18n.setCurrentLocale(browserLocale)
     return browserLocale
   }

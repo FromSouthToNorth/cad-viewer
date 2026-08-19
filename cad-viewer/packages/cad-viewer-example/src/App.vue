@@ -11,7 +11,6 @@
     <!-- CAD viewer when a file is selected or a new drawing is created -->
     <div v-else>
       <MlCadViewer
-        locale="en"
         :local-file="store.selectedFile ?? undefined"
         :mode="selectedMode"
         :use-main-thread-draw="useMainThreadDraw"
