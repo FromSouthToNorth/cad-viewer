@@ -50,7 +50,7 @@ function localOverrideFor(packageName, realdwgDir) {
     throw new Error(`Local package ${packageName} not found at ${pkgDir}`)
   }
   const rel = relative(rootDir, pkgDir).replaceAll('\\', '/')
-  return `'link:${rel}'`
+  return `'file:${rel}'`
 }
 
 function switchToLocal(content, realdwgDir) {
@@ -75,7 +75,7 @@ function switchToLocal(content, realdwgDir) {
 }
 
 function switchToNpm(content) {
-  const localLine = /^  '(@mlightcad\/(?:common|geometry-engine|graphic-interface))': 'link:[^']*'$/gm
+  const localLine = /^  '(@mlightcad\/(?:common|geometry-engine|graphic-interface))': '(?:link|file):[^']*'$/gm
   const withoutSiblings = content.replace(localLine, '')
   const next = withoutSiblings.replace(
     /(['"]?@mlightcad\/data-model['"]?\s*:\s*)(['"]).*?\2/,

@@ -17,6 +17,7 @@ const bar = document.getElementById('bar') as HTMLDivElement
 const paint = document.getElementById('paint') as HTMLDivElement
 const params = new URLSearchParams(location.search)
 const progressive = params.get('progressive') !== '0'
+const writeMode = params.get('mode') === 'write'
 const file = params.get('file') ?? 'progressive.dxf'
 const t0 = performance.now()
 
@@ -89,7 +90,7 @@ const buffer = await response.arrayBuffer()
 bar.textContent = `[${file}] opening (progressive=${progressive})…`
 
 const opened = await docManager.openDocument(file, buffer, {
-  mode: AcEdOpenMode.Read,
+  mode: writeMode ? AcEdOpenMode.Write : AcEdOpenMode.Read,
   progressiveRendering: progressive
 })
 openOk = opened
