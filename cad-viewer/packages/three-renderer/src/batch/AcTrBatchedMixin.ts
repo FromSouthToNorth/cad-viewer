@@ -1070,9 +1070,13 @@ export function createAcTrBatchedMixin<
     /**
      * Disposes packed GPU buffers held by this batch object.
      *
+     * Marks the container as disposed so deferred compaction passes scheduled
+     * by {@link AcTrBatchedGroup} skip it.
+     *
      * @returns This instance for chaining.
      */
     dispose() {
+      this.userData.batchDisposed = true
       this.geometry.dispose()
       return this
     }

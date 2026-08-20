@@ -27,20 +27,43 @@ describe('AcApEntityService', () => {
     expect(target.color).toEqual({ cloned: true })
   })
 
-  test('eraseEntities returns the number of erased entities', () => {
-    const erased = new Set<string>()
+  test('eraseEntities erases existing entities in one batched block-table call', () => {
+    const removed: string[][] = []
     const db = {
-      openEntityForWrite: jest.fn((objectId: string) => {
-        if (objectId === 'missing') return undefined
-        return { erase: () => erased.add(objectId) }
-      })
+      tables: {
+        blockTable: {
+          getEntityById: jest.fn((objectId: string) =>
+            objectId === 'missing' ? undefined : { objectId }
+          ),
+          removeEntity: jest.fn((ids: string[]) => {
+            removed.push(ids)
+            return true
+          })
+        }
+      }
     }
     const service = new AcApEntityService(db as never)
 
     const count = service.eraseEntities(['a', 'b', 'missing'])
 
     expect(count).toBe(2)
-    expect(erased).toEqual(new Set(['a', 'b']))
-    expect(db.openEntityForWrite).toHaveBeenCalledTimes(3)
+    expect(removed).toEqual([['a', 'b']])
+    expect(db.tables.blockTable.removeEntity).toHaveBeenCalledTimes(1)
+  })
+
+  test('eraseEntities no-ops for an empty id list', () => {
+    const removeEntity = jest.fn()
+    const db = {
+      tables: {
+        blockTable: {
+          getEntityById: jest.fn(),
+          removeEntity
+        }
+      }
+    }
+    const service = new AcApEntityService(db as never)
+
+    expect(service.eraseEntities([])).toBe(0)
+    expect(removeEntity).not.toHaveBeenCalled()
   })
 })

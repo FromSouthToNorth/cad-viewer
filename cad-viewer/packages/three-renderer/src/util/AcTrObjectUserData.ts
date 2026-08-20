@@ -17,6 +17,13 @@ export interface AcTrRteObjectUserData {
   geometryRebased?: boolean
   /** MTEXT layout cache invalidated after geometry rebase. */
   layoutCache?: unknown
+  /**
+   * Batch container was disposed; deferred compaction passes skip it.
+   *
+   * Set by the batched-object mixin `dispose()` so a coalesced removal flush
+   * scheduled before teardown never touches freed GPU buffers.
+   */
+  batchDisposed?: boolean
 }
 
 /**

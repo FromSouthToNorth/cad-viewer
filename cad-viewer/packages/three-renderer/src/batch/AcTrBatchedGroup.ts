@@ -278,6 +278,19 @@ export class AcTrBatchedGroup extends THREE.Group {
    * - The value is the entity's position information in the batched objects
    */
   private _entitiesMap: Map<string, AcTrEntityInBatchedObject[]>
+  /**
+   * Batches awaiting one coalesced compaction + highlight-mask upload pass.
+   *
+   * {@link removeEntity} runs once per erased entity. Both `optimize()`
+   * (buffer compaction) and `flushHighlightMask()` (mask texture upload) cost
+   * O(batch slot count) each, so running them per removal made bulk erases
+   * quadratic. Removals instead mark affected batches here and a single
+   * microtask flush compacts and uploads each batch once, after the current
+   * synchronous erase loop completes.
+   */
+  private _pendingBatchFlushes = new Set<AcTrBatchedObject>()
+  /** True while the coalesced flush microtask is scheduled. */
+  private _batchFlushScheduled = false
 
   /**
    * Creates an empty batched group with highlight and unbatched child containers.
@@ -481,6 +494,7 @@ export class AcTrBatchedGroup extends THREE.Group {
     this._unbatchedObjects.clear()
     this._unbatchedEntities.clear()
     this._entitiesMap.clear()
+    this._pendingBatchFlushes.clear()
     return this
   }
 
@@ -653,7 +667,11 @@ export class AcTrBatchedGroup extends THREE.Group {
         }
 
         if (rebound === material) {
-          this.refreshLayerBoundMaterialColor(material, layerTraits, styleManager)
+          this.refreshLayerBoundMaterialColor(
+            material,
+            layerTraits,
+            styleManager
+          )
           continue
         }
 
@@ -1060,9 +1078,7 @@ export class AcTrBatchedGroup extends THREE.Group {
     }
 
     const hasIndex = geometry.getIndex() !== null
-    const batches = hasIndex
-      ? this._lineWithIndexBatches
-      : this._lineBatches
+    const batches = hasIndex ? this._lineWithIndexBatches : this._lineBatches
     const batchedLine = this.resolveOriginBatch(
       batches,
       material.id,
@@ -1190,9 +1206,7 @@ export class AcTrBatchedGroup extends THREE.Group {
     }
 
     const hasIndex = geometry.getIndex() !== null
-    const batches = hasIndex
-      ? this._meshWithIndexBatches
-      : this._meshBatches
+    const batches = hasIndex ? this._meshWithIndexBatches : this._meshBatches
     const batchedMesh = this.resolveOriginBatch(
       batches,
       material.id,
@@ -1240,6 +1254,11 @@ export class AcTrBatchedGroup extends THREE.Group {
 
   /**
    * Removes one entity from batch/unbatched containers.
+   *
+   * Deleted slots have their highlight mask bits cleared by the batch
+   * container's `deleteGeometry`; compaction and the mask texture upload are
+   * deferred to one coalesced pass per batch (see {@link _pendingBatchFlushes})
+   * so erasing thousands of entities in one selection stays linear.
    */
   removeEntity(objectId: string) {
     let result = false
@@ -1257,15 +1276,13 @@ export class AcTrBatchedGroup extends THREE.Group {
           result = true
         }
       }
-      batchedObjects.forEach(batchedObject => batchedObject.optimize())
-      this.unselect(objectId)
-      this.unhover(objectId)
+      batchedObjects.forEach(batchedObject =>
+        this.scheduleBatchFlush(batchedObject)
+      )
       this._entitiesMap.delete(objectId)
     }
     const unbatchedObjects = this._unbatchedEntities.get(objectId)
     if (unbatchedObjects) {
-      this.unselect(objectId)
-      this.unhover(objectId)
       unbatchedObjects.forEach(object => {
         this.disposeObject(object)
         this._unbatchedObjects.remove(object)
@@ -1274,6 +1291,37 @@ export class AcTrBatchedGroup extends THREE.Group {
       result = true
     }
     return result
+  }
+
+  /**
+   * Marks a batch for the deferred compaction + mask upload pass.
+   *
+   * The first schedule in a task arms a microtask so every removal in the
+   * current synchronous burst shares one flush.
+   */
+  private scheduleBatchFlush(batchedObject: AcTrBatchedObject) {
+    this._pendingBatchFlushes.add(batchedObject)
+    if (!this._batchFlushScheduled) {
+      this._batchFlushScheduled = true
+      queueMicrotask(() => this.flushPendingBatchFlushes())
+    }
+  }
+
+  /**
+   * Runs the single deferred compaction and mask upload for batches touched
+   * since the last task boundary. Batches disposed in the meantime are skipped.
+   */
+  private flushPendingBatchFlushes() {
+    this._batchFlushScheduled = false
+    const pending = this._pendingBatchFlushes
+    this._pendingBatchFlushes = new Set()
+    pending.forEach(batchedObject => {
+      if (batchedObject.userData.batchDisposed) {
+        return
+      }
+      batchedObject.flushHighlightMask()
+      batchedObject.optimize()
+    })
   }
 
   /**

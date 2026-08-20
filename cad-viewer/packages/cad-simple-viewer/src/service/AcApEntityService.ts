@@ -145,18 +145,28 @@ export class AcApEntityService {
   /**
    * Erases entities by object id.
    *
+   * Erasure goes through one {@link AcDbBlockTable.removeEntity} call with the
+   * full id array: each owner block record then scans and compacts its entity
+   * array exactly once and dispatches a single batched erased notification.
+   * Per-entity {@link AcDbEntity.erase} rescans the owner record's entity array
+   * and dispatches one event per id, which is quadratic for large box
+   * selections and stalls the tab.
+   *
    * @param objectIds - Entity ids to erase.
    * @returns Number of entities successfully erased.
    */
   eraseEntities(objectIds: AcDbObjectId[]): number {
-    let count = 0
-    objectIds.forEach(objectId => {
-      const entity = this.db.openEntityForWrite(objectId)
-      if (!entity) return
-      entity.erase()
-      count++
-    })
-    return count
+    if (objectIds.length === 0) {
+      return 0
+    }
+    const blockTable = this.db.tables.blockTable
+    const idsToErase = objectIds.filter(
+      objectId => blockTable.getEntityById(objectId) !== undefined
+    )
+    if (idsToErase.length > 0) {
+      blockTable.removeEntity(idsToErase)
+    }
+    return idsToErase.length
   }
 
   /**
