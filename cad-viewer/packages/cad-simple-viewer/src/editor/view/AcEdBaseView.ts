@@ -28,6 +28,13 @@ import {
 } from './AcEdSpatialQueryResult'
 
 /**
+ * Maximum number of entity ids printed in one selection log line. Larger
+ * selections are truncated with a `…(+N more)` suffix so box selections over
+ * huge datasets stay readable in the console.
+ */
+const SELECTION_LOG_MAX_IDS = 200
+
+/**
  * Interface to define arguments of mouse event events.
  */
 export interface AcEdMouseEventArgs {
@@ -800,12 +807,20 @@ export abstract class AcEdBaseView {
 
   /**
    * Applies selection based on action.
+   *
+   * Logs the mutation so the user can see exactly which objects were selected
+   * or removed from the selection.
    */
   applySelection(ids: AcDbObjectId[], action: AcEdSelectionAction) {
+    const startedAt = performance.now()
+
     if (action === 'replace') {
       this.selectionSet.clear()
-      const unique = ids.filter(id => !this.selectionSet.has(id))
-      if (unique.length > 0) this.selectionSet.add(unique)
+      if (ids.length > 0) {
+        // The set was just cleared, so every id is new.
+        this.selectionSet.add(ids)
+      }
+      this.logSelectionResult(action, ids, startedAt)
       return
     }
 
@@ -814,21 +829,82 @@ export abstract class AcEdBaseView {
     if (action === 'add') {
       const unique = ids.filter(id => !this.selectionSet.has(id))
       if (unique.length > 0) this.selectionSet.add(unique)
+      this.logSelectionResult(action, unique, startedAt)
     } else {
       const existing = ids.filter(id => this.selectionSet.has(id))
       if (existing.length > 0) this.selectionSet.delete(existing)
+      this.logSelectionResult(action, existing, startedAt)
     }
   }
 
   /**
+   * Logs one selection mutation with the affected entity ids.
+   *
+   * The id list is truncated to {@link SELECTION_LOG_MAX_IDS} entries; the
+   * suffix reports how many more ids were part of the mutation.
+   *
+   * @param action - Selection action that produced the mutation
+   * @param changedIds - Entity ids that were actually added or removed
+   * @param startedAt - Timestamp taken at the start of the mutation
+   */
+  protected logSelectionResult(
+    action: AcEdSelectionAction,
+    changedIds: AcDbObjectId[],
+    startedAt: number
+  ) {
+    const elapsedMs = performance.now() - startedAt
+    const shown = changedIds.slice(0, SELECTION_LOG_MAX_IDS)
+    const suffix =
+      changedIds.length > shown.length
+        ? ` …(+${changedIds.length - shown.length} more)`
+        : ''
+    console.log(
+      `[cad-selection] action=${action} changed=${changedIds.length}` +
+        ` total=${this.selectionSet.count} ms=${elapsedMs.toFixed(2)}` +
+        ` ids=[${shown.join(', ')}${suffix}]`
+    )
+  }
+
+  /**
+   * Entity id of the most recent single-click pick, or `null` after a box
+   * selection.
+   *
+   * Views with vertex marker or grip overlays override this to restrict the
+   * square feedback to the last picked entity; the default is `null`.
+   */
+  get lastPickedEntityId(): AcDbObjectId | null {
+    return null
+  }
+
+  /**
+   * Records the entity id of the most recent single-click pick.
+   *
+   * Views with vertex marker overlays override this to keep markers on the
+   * last picked entity only; the default implementation is a no-op.
+   *
+   * @param _id - Last picked entity id, or `null` after a box selection.
+   */
+  setLastPickedEntityId(_id: AcDbObjectId | null) {}
+
+  /**
    * Select entities by box with window/crossing behavior.
+   *
+   * Logs the query box, mode, action and spatial-search duration so box
+   * selections over large datasets can be profiled from the console.
    */
   selectByBoxWithMode(
     box: AcGeBox2d,
     mode: AcEdSelectionMode,
     action: AcEdSelectionAction = 'add'
   ) {
+    const startedAt = performance.now()
     const ids = this.collectSelectionIdsByBox(box, mode)
+    const searchMs = performance.now() - startedAt
+    console.log(
+      `[cad-selection] box=[${box.min.x}, ${box.min.y}, ${box.max.x}, ${box.max.y}]` +
+        ` mode=${mode} action=${action} hits=${ids.length}` +
+        ` searchMs=${searchMs.toFixed(2)}`
+    )
     this.applySelection(ids, action)
   }
 

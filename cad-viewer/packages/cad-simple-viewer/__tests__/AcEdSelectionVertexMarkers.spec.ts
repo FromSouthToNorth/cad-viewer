@@ -49,11 +49,15 @@ const gripPoints = [
   { x: 3, y: 4, z: 0 }
 ]
 
+const gripPoints2 = [{ x: 10, y: 20, z: 0 }]
+
 function createHarness(openMode: AcEdOpenMode = AcEdOpenMode.Read) {
   const blockTable = {
-    getEntityById: jest.fn((id: string) =>
-      id === 'e1' ? { subGetGripPoints: () => gripPoints } : undefined
-    )
+    getEntityById: jest.fn((id: string) => {
+      if (id === 'e1') return { subGetGripPoints: () => gripPoints }
+      if (id === 'e2') return { subGetGripPoints: () => gripPoints2 }
+      return undefined
+    })
   }
   const doc = {
     openMode,
@@ -70,10 +74,20 @@ function createHarness(openMode: AcEdOpenMode = AcEdOpenMode.Read) {
     clearSelectionVertexMarkers: jest.fn()
   }
   const selectionState = { ids: [] as string[] }
+  const lastPickedState = { id: null as string | null }
   const view = {
+    get lastPickedEntityId() {
+      return lastPickedState.id
+    },
+    set lastPickedEntityId(id: string | null) {
+      lastPickedState.id = id
+    },
     selectionSet: {
       get ids() {
         return selectionState.ids
+      },
+      get count() {
+        return selectionState.ids.length
       },
       events: { selectionAdded, selectionRemoved }
     },
@@ -86,6 +100,7 @@ function createHarness(openMode: AcEdOpenMode = AcEdOpenMode.Read) {
     view,
     scene,
     selectionState,
+    lastPickedState,
     selectionAdded,
     selectionRemoved,
     hover,
@@ -96,9 +111,7 @@ function createHarness(openMode: AcEdOpenMode = AcEdOpenMode.Read) {
 
 describe('AcEdSelectionVertexMarkers', () => {
   beforeEach(() => {
-    jest
-      .spyOn(AcDbSysVarManager.instance(), 'getVar')
-      .mockReturnValue(0)
+    jest.spyOn(AcDbSysVarManager.instance(), 'getVar').mockReturnValue(0)
   })
 
   afterEach(() => {
@@ -127,17 +140,95 @@ describe('AcEdSelectionVertexMarkers', () => {
     selectionAdded.fire({ ids: ['e1'] })
     hover.fire({ id: 'e2' })
 
-    expect(scene.setSelectionVertexMarkers).toHaveBeenLastCalledWith(
-      expect.arrayContaining([expect.objectContaining({ x: 1, y: 2 })])
-    )
     const calls = scene.setSelectionVertexMarkers.mock.calls
     const lastCall = calls[calls.length - 1][0]
-    expect(lastCall).toHaveLength(gripPoints.length)
+    expect(lastCall).toEqual([...gripPoints, ...gripPoints2])
+  })
+
+  it('restricts click-pick markers to the last picked entity only', () => {
+    const { view, scene, selectionState, selectionAdded, lastPickedState } =
+      createHarness()
+    const markers = new AcEdSelectionVertexMarkers(view)
+
+    selectionState.ids = ['e1', 'e2']
+    selectionAdded.fire({ ids: ['e1', 'e2'] })
+    lastPickedState.id = 'e1'
+    markers.refresh()
+
+    expect(scene.setSelectionVertexMarkers).toHaveBeenLastCalledWith(gripPoints)
+
+    lastPickedState.id = 'e2'
+    markers.refresh()
+
+    expect(scene.setSelectionVertexMarkers).toHaveBeenLastCalledWith(
+      gripPoints2
+    )
+  })
+
+  it('shows markers for every selected entity after a box selection', () => {
+    const { view, scene, selectionState, selectionAdded, lastPickedState } =
+      createHarness()
+    const markers = new AcEdSelectionVertexMarkers(view)
+
+    selectionState.ids = ['e1', 'e2']
+    selectionAdded.fire({ ids: ['e1', 'e2'] })
+    lastPickedState.id = 'e1'
+    markers.refresh()
+    lastPickedState.id = null
+    markers.refresh()
+
+    expect(scene.setSelectionVertexMarkers).toHaveBeenLastCalledWith([
+      ...gripPoints,
+      ...gripPoints2
+    ])
+  })
+
+  it('falls back to the remaining selection when the last picked entity is removed', () => {
+    const {
+      view,
+      scene,
+      selectionState,
+      selectionAdded,
+      selectionRemoved,
+      lastPickedState
+    } = createHarness()
+    new AcEdSelectionVertexMarkers(view)
+
+    selectionState.ids = ['e1', 'e2']
+    selectionAdded.fire({ ids: ['e1', 'e2'] })
+    lastPickedState.id = 'e1'
+    selectionState.ids = ['e2']
+    selectionRemoved.fire({ ids: ['e1'] })
+
+    expect(scene.setSelectionVertexMarkers).toHaveBeenLastCalledWith(
+      gripPoints2
+    )
+  })
+
+  it('re-focuses markers when clicking an already selected entity', () => {
+    const { view, scene, selectionState, selectionAdded, lastPickedState } =
+      createHarness()
+    const markers = new AcEdSelectionVertexMarkers(view)
+
+    selectionState.ids = ['e1', 'e2']
+    selectionAdded.fire({ ids: ['e1', 'e2'] })
+    lastPickedState.id = 'e2'
+    markers.refresh()
+    lastPickedState.id = 'e1'
+    markers.refresh()
+
+    expect(scene.setSelectionVertexMarkers).toHaveBeenLastCalledWith(gripPoints)
   })
 
   it('clears markers when the selection and hover sets become empty', () => {
-    const { view, scene, selectionState, selectionAdded, selectionRemoved, unhover } =
-      createHarness()
+    const {
+      view,
+      scene,
+      selectionState,
+      selectionAdded,
+      selectionRemoved,
+      unhover
+    } = createHarness()
     new AcEdSelectionVertexMarkers(view)
 
     selectionState.ids = ['e1']
@@ -160,6 +251,36 @@ describe('AcEdSelectionVertexMarkers', () => {
 
     expect(scene.setSelectionVertexMarkers).not.toHaveBeenCalled()
     expect(scene.clearSelectionVertexMarkers).toHaveBeenCalled()
+  })
+
+  it('skips per-entity markers for box selections beyond the cap', () => {
+    const { view, scene, selectionState, selectionAdded } = createHarness()
+    new AcEdSelectionVertexMarkers(view)
+
+    selectionState.ids = Array.from(
+      { length: AcEdSelectionVertexMarkers.MAX_MARKER_ENTITIES + 1 },
+      (_, index) => `e${index}`
+    )
+    selectionAdded.fire({ ids: selectionState.ids })
+
+    expect(scene.setSelectionVertexMarkers).not.toHaveBeenCalled()
+    expect(scene.clearSelectionVertexMarkers).toHaveBeenCalled()
+  })
+
+  it('still marks the last picked entity inside a huge selection', () => {
+    const { view, scene, selectionState, selectionAdded, lastPickedState } =
+      createHarness()
+    const markers = new AcEdSelectionVertexMarkers(view)
+
+    selectionState.ids = Array.from(
+      { length: AcEdSelectionVertexMarkers.MAX_MARKER_ENTITIES + 1 },
+      (_, index) => `e${index}`
+    )
+    lastPickedState.id = 'e1'
+    selectionAdded.fire({ ids: selectionState.ids })
+    markers.refresh()
+
+    expect(scene.setSelectionVertexMarkers).toHaveBeenLastCalledWith(gripPoints)
   })
 
   it('stops listening after dispose', () => {

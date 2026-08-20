@@ -1334,6 +1334,7 @@ export class AcEdInputManager {
             if (this.view.isSelectionClick(startCanvas, endCanvas)) {
               const picked = this.view.pick(endWcs)
               if (picked.length > 0) {
+                this.view.setLastPickedEntityId(picked[0].id)
                 this.view.applySelection([picked[0].id], action)
               } else if (action === 'replace') {
                 this.view.selectionSet.clear()

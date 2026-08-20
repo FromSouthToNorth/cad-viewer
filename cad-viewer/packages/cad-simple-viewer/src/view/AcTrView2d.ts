@@ -47,6 +47,8 @@ import {
   AcEdGripManager,
   AcEdMTextEditor,
   AcEdOpenMode,
+  AcEdSelectionAction,
+  AcEdSelectionMode,
   AcEdSelectionVertexMarkers,
   AcEdSpatialQueryResultItem,
   AcEdSpatialQueryResultItemEx,
@@ -258,6 +260,8 @@ export class AcTrView2d extends AcEdBaseView {
   private _gripManager: AcEdGripManager
   /** Screen-space vertex markers driven by the selection/hover set. */
   private _selectionVertexMarkers: AcEdSelectionVertexMarkers
+  /** Entity id of the most recent single-click pick (`null` = box select). */
+  private _lastPickedEntityId: AcDbObjectId | null = null
   /** Global keyboard shortcuts for the view (undo/redo, erase, etc.). */
   private _keyHandler: AcEdViewKeyHandler
 
@@ -476,6 +480,7 @@ export class AcTrView2d extends AcEdBaseView {
             if (action === 'replace') {
               this.htmlTransientManager.deselectAll()
             }
+            this.setLastPickedEntityId(picked[0].id)
             this.applySelection([picked[0].id], action)
           } else if (action === 'replace') {
             this.selectionSet.clear()
@@ -1594,6 +1599,41 @@ export class AcTrView2d extends AcEdBaseView {
     const results = this.pick(point)
     results.forEach(item => idsAdded.push(item.id))
     if (idsAdded.length > 0) this.selectionSet.add(idsAdded)
+  }
+
+  /**
+   * Entity id of the most recent single-click pick, or `null` after a box
+   * selection. Drives the vertex markers and HTML grips so only the last
+   * picked entity shows square feedback.
+   */
+  get lastPickedEntityId(): AcDbObjectId | null {
+    return this._lastPickedEntityId
+  }
+
+  /**
+   * Records the entity id of the most recent single-click pick and refreshes
+   * the vertex marker overlay and the HTML grip handles accordingly.
+   */
+  setLastPickedEntityId(id: AcDbObjectId | null) {
+    if (this._lastPickedEntityId === id) return
+    this._lastPickedEntityId = id
+    this._selectionVertexMarkers.refresh()
+    this._gripManager.refresh()
+  }
+
+  /**
+   * Select entities by box with window/crossing behavior.
+   *
+   * Box selections lift the single-click pick restriction so vertex markers
+   * show on every selected entity again.
+   */
+  selectByBoxWithMode(
+    box: AcGeBox2d,
+    mode: AcEdSelectionMode,
+    action: AcEdSelectionAction = 'add'
+  ) {
+    this.setLastPickedEntityId(null)
+    super.selectByBoxWithMode(box, mode, action)
   }
 
   /**

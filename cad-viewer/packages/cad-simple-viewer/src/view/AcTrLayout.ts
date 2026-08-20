@@ -107,6 +107,15 @@ export class AcTrLayout {
    * layer to hide fragments that were bucketed onto other layers.
    */
   private _insertLayerByObjectId: Map<AcDbObjectId, string>
+  /**
+   * Reverse index: entity object id → render layers holding fragments of it.
+   *
+   * INSERT decomposition buckets one entity's fragments onto several layers,
+   * so a scan of every layer per selected id made bulk highlight O(ids ×
+   * layers). This index keeps `getLayersByObjectId` an O(1) lookup for
+   * large box selections.
+   */
+  private _entityLayerIndex: Map<AcDbObjectId, AcTrLayer[]>
   /** The flag indicating whether the layout is loaded/activated */
   private _isLoaded: boolean
   /**
@@ -128,6 +137,7 @@ export class AcTrLayout {
     this._extentExcludedObjectIds = new Set()
     this._layers = new Map()
     this._insertLayerByObjectId = new Map()
+    this._entityLayerIndex = new Map()
     this._isLoaded = false
   }
 
@@ -305,6 +315,7 @@ export class AcTrLayout {
     this._boxDirty = true
     this._extentExcludedObjectIds.clear()
     this._insertLayerByObjectId.clear()
+    this._entityLayerIndex.clear()
     this._spatialIndex.clear()
     return this
   }
@@ -366,6 +377,7 @@ export class AcTrLayout {
     }
 
     layer.addEntity(entity)
+    this.indexEntityLayer(entity.objectId, layer)
 
     const insertLayerName = entity.userData.insertLayerName
     if (insertLayerName) {
@@ -415,6 +427,7 @@ export class AcTrLayout {
     if (!appended) {
       return false
     }
+    this.indexEntityLayer(meta.objectId, layer)
 
     if (!extendBbox) {
       this._extentExcludedObjectIds.add(meta.objectId)
@@ -439,15 +452,27 @@ export class AcTrLayout {
    */
   removeEntity(objectId: AcDbObjectId) {
     let result = false
-    for (const [_, layer] of this._layers) {
-      if (layer.removeEntity(objectId)) {
-        result = true
+    const indexedLayers = this._entityLayerIndex.get(objectId)
+    if (indexedLayers) {
+      for (const layer of indexedLayers) {
+        if (layer.removeEntity(objectId)) {
+          result = true
+        }
+      }
+    } else {
+      // Fallback when the reverse index has no entry for this id; keeps
+      // removal correct even if some path bypassed the index.
+      for (const [_, layer] of this._layers) {
+        if (layer.removeEntity(objectId)) {
+          result = true
+        }
       }
     }
     if (result) {
       this._spatialIndex.removeById(objectId)
       this._extentExcludedObjectIds.delete(objectId)
       this._insertLayerByObjectId.delete(objectId)
+      this._entityLayerIndex.delete(objectId)
       this.invalidateBox()
     }
     return result
@@ -466,6 +491,7 @@ export class AcTrLayout {
         if (insertLayerName) {
           this._insertLayerByObjectId.set(entity.objectId, insertLayerName)
         }
+        this.rebuildEntityLayerIndex(entity.objectId)
         this._spatialIndex.removeById(entity.objectId)
         this.registerEntitySpatialIndex(entity)
         this.invalidateBox()
@@ -479,6 +505,9 @@ export class AcTrLayout {
    * Returns true when any layer in this layout contains the entity.
    */
   hasEntity(objectId: AcDbObjectId) {
+    if (this._entityLayerIndex.has(objectId)) {
+      return true
+    }
     for (const [_, layer] of this._layers) {
       if (layer.hasEntity(objectId)) {
         return true
@@ -832,6 +861,9 @@ export class AcTrLayout {
     ids: AcDbObjectId[],
     apply: (layer: AcTrLayer, entityIds: AcDbObjectId[]) => void
   ) {
+    if (ids.length === 0 || this._entityLayerIndex.size === 0) {
+      return
+    }
     const layerToIds = new Map<AcTrLayer, AcDbObjectId[]>()
     for (const id of ids) {
       const layers = this.getLayersByObjectId(id)
@@ -882,13 +914,45 @@ export class AcTrLayout {
    *          returns an empty array if no matching layers are found
    */
   private getLayersByObjectId(objectId: AcDbObjectId) {
-    const layers = []
+    return this._entityLayerIndex.get(objectId) ?? []
+  }
+
+  /**
+   * Records that one entity id has geometry in the given layer.
+   *
+   * Called from the entity-ingestion paths (`addEntity` / `addDirectEntity`)
+   * so the reverse index tracks the same membership as the batched groups.
+   * A single INSERT may contribute fragments to several layers, so one id can
+   * map to multiple entries.
+   */
+  private indexEntityLayer(objectId: AcDbObjectId, layer: AcTrLayer) {
+    const layers = this._entityLayerIndex.get(objectId)
+    if (!layers) {
+      this._entityLayerIndex.set(objectId, [layer])
+    } else if (!layers.includes(layer)) {
+      layers.push(layer)
+    }
+  }
+
+  /**
+   * Rebuilds the reverse-index entry for one id by scanning the layer list.
+   *
+   * Used after removal or update, where membership may have changed across
+   * layers. Runs in O(layers), but those operations are per-entity and rare
+   * compared to selection queries.
+   */
+  private rebuildEntityLayerIndex(objectId: AcDbObjectId) {
+    const layers: AcTrLayer[] = []
     for (const [_, layer] of this._layers) {
       if (layer.hasEntity(objectId)) {
         layers.push(layer)
       }
     }
-    return layers
+    if (layers.length > 0) {
+      this._entityLayerIndex.set(objectId, layers)
+    } else {
+      this._entityLayerIndex.delete(objectId)
+    }
   }
 
   /**

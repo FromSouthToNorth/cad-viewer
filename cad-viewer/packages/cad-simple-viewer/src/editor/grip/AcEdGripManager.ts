@@ -116,9 +116,10 @@ export class AcEdGripManager {
    *
    * Clears existing entries first. If grips are not allowed (read-only mode,
    * active command, MText editor, or selection over limit), no new handles are
-   * created. Otherwise, iterates selected entities, queries grip points via
-   * `subGetGripPoints()`, creates handles, wires pointer events, and positions
-   * each entry in container coordinates.
+   * created. Otherwise, iterates selected entities (or only the last
+   * single-click picked entity when it is still selected), queries grip points
+   * via `subGetGripPoints()`, creates handles, wires pointer events, and
+   * positions each entry in container coordinates.
    */
   refresh() {
     this.clearEntries()
@@ -130,7 +131,16 @@ export class AcEdGripManager {
     const blockTable = doc.database.tables.blockTable
     const appearance = readGripAppearance(doc.database)
 
-    for (const entityId of this._view.selectionSet.ids) {
+    // Single-click picks keep grips on the last picked entity only; box
+    // selections (or a pick target that left the set) grip every selected id.
+    const selectedIds = new Set<AcDbObjectId>(this._view.selectionSet.ids)
+    const lastPicked = this._view.lastPickedEntityId
+    const entityIds =
+      lastPicked && selectedIds.has(lastPicked)
+        ? [lastPicked]
+        : Array.from(selectedIds)
+
+    for (const entityId of entityIds) {
       const entity = blockTable.getEntityById(entityId)
       if (!entity) continue
 
