@@ -40,6 +40,28 @@ export interface AcDbWorkerResponse<TOutput = unknown> {
 }
 
 /**
+ * Intermediate progress notification posted by a worker task before its final
+ * {@link AcDbWorkerResponse}. `progress` is a ratio in `[0, 1]`.
+ */
+export interface AcDbWorkerProgressMessage {
+  /** Task identifier matching the originating {@link AcDbWorkerMessage.id}. */
+  id: string
+  /** Discriminant so the main thread can tell progress from final responses. */
+  type: 'progress'
+  /** Completion ratio in `[0, 1]`. */
+  progress: number
+}
+
+/**
+ * Per-task context passed to {@link AcDbBaseWorker.executeTask} so worker
+ * implementations can report intermediate progress back to the main thread.
+ */
+export interface AcDbWorkerTaskContext {
+  /** Posts a progress notification for the current task. Ratio in `[0, 1]`. */
+  reportProgress(progress: number): void
+}
+
+/**
  * Base class for worker scripts
  * Handles all message passing - users only need to implement executeTask
  */
@@ -54,9 +76,12 @@ export abstract class AcDbBaseWorker<TInput = unknown, TOutput = unknown> {
   private setupMessageHandler(): void {
     self.onmessage = async (event: MessageEvent<AcDbWorkerMessage<TInput>>) => {
       const { id, input } = event.data
+      const context: AcDbWorkerTaskContext = {
+        reportProgress: progress => this.sendProgress(id, progress)
+      }
 
       try {
-        const result = await this.executeTask(input)
+        const result = await this.executeTask(input, context)
         this.sendResponse(id, true, result)
       } catch (error) {
         this.sendResponse(
@@ -67,6 +92,27 @@ export abstract class AcDbBaseWorker<TInput = unknown, TOutput = unknown> {
         )
       }
     }
+  }
+
+  /**
+   * Send an intermediate progress notification to the main thread.
+   */
+  private sendProgress(id: string, progress: number): void {
+    const message: AcDbWorkerProgressMessage = {
+      id,
+      type: 'progress',
+      progress: Math.min(1, Math.max(0, progress))
+    }
+    self.postMessage(message)
+  }
+
+  /**
+   * Objects transferred (zero-copy) with the success response instead of being
+   * structured-cloned. Implementations returning large typed arrays should
+   * override this and list their underlying buffers.
+   */
+  protected getTransferables(_data: TOutput): Transferable[] {
+    return []
   }
 
   /**
@@ -88,7 +134,8 @@ export abstract class AcDbBaseWorker<TInput = unknown, TOutput = unknown> {
     }
 
     try {
-      self.postMessage(response)
+      const transfer = success && data !== undefined ? this.getTransferables(data) : []
+      self.postMessage(response, transfer)
     } catch (postError) {
       const message =
         postError instanceof Error ? postError.message : String(postError)
@@ -118,7 +165,11 @@ export abstract class AcDbBaseWorker<TInput = unknown, TOutput = unknown> {
   /**
    * Execute the actual task - users must implement this
    * @param input - Input data for the task
+   * @param context - Per-task context (progress reporting)
    * @returns Promise or direct result
    */
-  protected abstract executeTask(input: TInput): Promise<TOutput> | TOutput
+  protected abstract executeTask(
+    input: TInput,
+    context: AcDbWorkerTaskContext
+  ): Promise<TOutput> | TOutput
 }

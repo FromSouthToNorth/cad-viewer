@@ -1,19 +1,53 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-ml-ui-theme="dark" class="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>DWG/DXF Viewer</title>
+    <script>
+      // Apply the persisted UI theme before first paint to avoid a flash.
+      ;(function () {
+        var theme = 'dark'
+        try {
+          var stored = window.localStorage.getItem('cad-viewer-example:ui-theme')
+          if (stored === 'light' || stored === 'dark') theme = stored
+        } catch (e) { /* storage unavailable */ }
+        document.documentElement.setAttribute('data-ml-ui-theme', theme)
+        document.documentElement.classList.toggle('dark', theme === 'dark')
+      })()
+    </script>
     <style>
+      #loader {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #ffffff;
+        z-index: 9999;
+      }
+
+      :root[data-ml-ui-theme='dark'] #loader {
+        background: #141414;
+      }
+
       .spinner {
         width: 40px;
         height: 40px;
         border: 4px solid #ccc;
-        border-top-color: #409EFF; /* Element Plus primary color */
+        border-top-color: #409eff; /* Element Plus primary color */
         border-radius: 50%;
         animation: spin 1s linear infinite;
       }
-    
+
+      :root[data-ml-ui-theme='dark'] .spinner {
+        border-color: #4c4d4f;
+        border-top-color: #409eff;
+      }
+
       @keyframes spin {
         to { transform: rotate(360deg); }
       }
@@ -21,20 +55,10 @@
   </head>
   <body>
     <!-- Loading overlay -->
-    <div id="loader" style="
-      position: fixed;
-      top: 0; left: 0;
-      width: 100vw;
-      height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: white;
-      z-index: 9999;
-    ">
+    <div id="loader">
       <div class="spinner"></div>
     </div>
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
-</html> 
+</html>

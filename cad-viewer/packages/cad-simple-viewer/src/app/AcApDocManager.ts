@@ -217,6 +217,15 @@ export interface AcApWebworkerFiles {
   dwgParser?: string | URL
 
   /**
+   * Optional URL of the Web Worker that tokenizes DXF files.
+   *
+   * The native DXF converter falls back to main-thread parsing when the
+   * worker is unreachable, so this entry is only needed when the host wants
+   * readiness checks to verify the deployed `dxf-parser-worker.js` bundle.
+   */
+  dxfParser?: string | URL
+
+  /**
    * URL of the Web Worker bundle responsible for rendering MTEXT entities.
    *
    * This worker handles MTEXT layout, formatting, and glyph processing

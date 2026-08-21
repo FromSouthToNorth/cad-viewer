@@ -9,12 +9,10 @@
 
 | 目录 | 说明 |
 | --- | --- |
-| `cad-viewer/` | 纯浏览器端 DWG/DXF 查看器与编辑器(解析、几何处理、渲染全部在浏览器内完成,无后端依赖) |
-| `realdwg-web/` | DWG/DXF 解析核心,仿 AutoCAD ObjectARX 的 API 设计,提供 `data-model`、`geometry-engine`、`graphic-interface` 等包 |
-| `data/` | 大图纸测试数据(真实矿图 DXF,含 95MB、38 万实体的 `JKYHMKA01A01yh3m.dxf`) |
-| `docs/` | [性能优化总结](./docs/性能优化总结.md)(根因分析、已实施优化、遗留工作) |
-
-两个子目录已作为普通目录直接 vendor 进本仓库(不再使用 gitlink),克隆后即可使用。
+| `cad-viewer/` | 纯浏览器端 DWG/DXF 查看器与编辑器 |
+| `realdwg-web/` | DWG/DXF 解析核心,仿 ObjectARX API 设计 |
+| `data/` | 大图纸测试数据(真实矿图 DXF) |
+| `docs/` | [性能优化总结](./docs/性能优化总结.md) |
 
 ## 环境要求
 
@@ -23,98 +21,87 @@
 
 ## 快速开始
 
-新环境只需在仓库根目录执行一次:
-
 ```bash
-node bootstrap.mjs
-```
-
-脚本会按顺序完成:安装 realdwg-web 依赖 → 构建 4 个本地包 → 将 cad-viewer 的
-overrides 切到本地(link: 实时链接)→ 安装 cad-viewer 依赖 → 全量构建验证。
-
-然后启动查看器:
-
-```bash
+node bootstrap.mjs          # 一键初始化(增量,已完成步骤自动跳过)
 cd cad-viewer
-pnpm dev          # 全功能查看器
-pnpm dev:simple   # 简单查看器
+pnpm dev                    # 全功能查看器
+pnpm dev:simple             # 简单查看器
 ```
 
-手动初始化(等价于 bootstrap.mjs 的各步):
-
-```bash
-# 1. 安装并构建 realdwg-web 的本地包
-cd realdwg-web && pnpm install
-pnpm exec nx run-many -t build -p @mlightcad/common @mlightcad/geometry-engine \
-  @mlightcad/graphic-interface @mlightcad/data-model
-
-# 2. 将 cad-viewer 的 @mlightcad/* 依赖切换到本地 realdwg-web 并安装
-cd ../cad-viewer
-node tools/use-local-realdwg.mjs
-pnpm install
-```
+首次初始化较慢(需安装依赖 + 全量构建),后续重跑会自动跳过已完成步骤。
+使用 `node bootstrap.mjs --fast` 可跳过最终验证构建,更快进入开发。
 
 ## 本地联动(cad-viewer ↔ realdwg-web)
 
-`cad-viewer/tools/use-local-realdwg.mjs` 通过修改 `cad-viewer/pnpm-workspace.yaml` 的
-overrides,把 `@mlightcad/data-model` 等包在 npm 源与本地 `../realdwg-web` 检出之间切换:
+cad-viewer 通过 pnpm `link:` 覆盖直接链接 realdwg-web 源码,**修改 realdwg-web 后只需重新构建对应包并重启 dev server,无需重新 `pnpm install`**。
 
 ```bash
-cd cad-viewer
-node tools/use-local-realdwg.mjs         # 切到本地检出(需先构建,见上文)
-node tools/use-local-realdwg.mjs --off   # 切回 npm 源
-REALDWG_WEB_DIR=../../realdwg-web node tools/use-local-realdwg.mjs  # 自定义路径
+# 日常开发:修改 realdwg-web 后重建
+cd realdwg-web
+pnpm exec nx run-many -t build -p @mlightcad/common @mlightcad/geometry-engine \
+  @mlightcad/graphic-interface @mlightcad/data-model
+
+# 切回 npm 源(发布/CI 前)
+cd cad-viewer && node tools/use-local-realdwg.mjs --off && pnpm install
+
+# 切回本地联动
+cd cad-viewer && node tools/use-local-realdwg.mjs && pnpm install
 ```
 
-本地模式使用 `link:` 覆盖,cad-viewer 直接链接 realdwg-web 源码目录:**修改
-realdwg-web 代码后只需重新构建对应包并重启 dev server,无需重新 `pnpm install`。**
+防护机制: cad-viewer 的 `predev`/`prebuild` 会自动检查本地包是否已构建,
+未构建时给出修复提示而非晦涩的 TS2307 报错。
 
-防护机制:cad-viewer 的 `prebuild`/`predev`/`postinstall` 会运行
-`scripts/check-local-deps.mjs`,本地包未构建时直接给出修复提示,而不是晦涩的
-TS2307 报错。
+> **发布或提交前必须执行 `--off` 还原 overrides 并重新 `pnpm install`。**
 
-**发布或提交前必须执行 `--off` 还原 overrides 并重新 `pnpm install`。**
+## 手动初始化
+
+等价于 `bootstrap.mjs` 的各步,用于排查问题:
+
+```bash
+cd realdwg-web && pnpm install
+pnpm exec nx run-many -t build -p @mlightcad/common @mlightcad/geometry-engine \
+  @mlightcad/graphic-interface @mlightcad/data-model
+cd ../cad-viewer
+node tools/use-local-realdwg.mjs
+pnpm install
+pnpm build          # 可选,验证构建
+```
 
 ## 性能测试
 
-基准与诊断脚本位于 `realdwg-web/tools/bench/`:
-
 ```bash
 cd realdwg-web
-node tools/bench/generate-large-dxf.mjs   # 生成大文件夹具(lines/lwpolylines/circles/mixed/bigcoords 等)
-node tools/bench/bench-parse.cjs          # 解析基准(bestMs/avgMs/peakHeapMB/entities,结果存 baseline.json)
-node tools/bench/scan-coords.cjs          # DXF 坐标分布扫描(大坐标诊断用)
+node tools/bench/generate-large-dxf.mjs   # 生成大文件夹具
+node tools/bench/bench-parse.cjs          # 解析基准测试
+node tools/bench/scan-coords.cjs          # DXF 坐标分布扫描
 ```
 
-浏览器端渐进式渲染 A/B 基准:`cad-viewer/packages/cad-viewer-example/bench/progressive.html`。
+浏览器端渐进式渲染 A/B 基准: `cad-viewer/packages/cad-viewer-example/bench/progressive.html`。
 
-真实大图纸位于 `data/`(煤矿矿图,mxdraw 生成,GBK 编码),其中
-`JKYHMKA01A01yh3m.dxf`(95MB、389,328 实体、坐标千万级)是当前优化的目标文件。
+真实大图纸位于 `data/`(煤矿矿图),其中 `JKYHMKA01A01yh3m.dxf`(95MB、38 万实体)是当前优化目标。
 
 ## 测试
 
 ```bash
-cd realdwg-web && pnpm test                       # data-model 等包(821/821)
-cd ../cad-viewer && pnpm --filter @mlightcad/cad-simple-viewer test   # 简单查看器(358/358)
+cd realdwg-web && pnpm test                                           # data-model 等(821)
+cd ../cad-viewer && pnpm --filter @mlightcad/cad-simple-viewer test   # 简单查看器(358)
 ```
 
 ## 文档
 
-- [docs/性能优化总结.md](./docs/性能优化总结.md):本次大图纸优化的背景、根因、已实施改动(M0–M2)、基准数据与遗留工作(M3+)
-- [docs/架构图.md](./docs/架构图.md):项目流程图与架构图(工作区结构、DXF/DWG 解析管线、渐进式渲染流程、类结构、基准工具链,Mermaid 绘制)
-- [cad-viewer/README.md](./cad-viewer/README.md)(含中/日/韩/西/葡/俄/捷克等多语言版本)
-- [realdwg-web/README.md](./realdwg-web/README.md):解析核心的 API、转换器注册机制与许可证说明
+- [docs/性能优化总结.md](./docs/性能优化总结.md): 根因分析、已实施优化(M0–M2)、遗留工作(M3+)
+- [docs/架构图.md](./docs/架构图.md): 项目流程图与架构图(Mermaid)
+- [docs/高性能技术分析.md](./docs/高性能技术分析.md)
+- [cad-viewer/README.md](./cad-viewer/README.md)(含多语言版本)
+- [realdwg-web/README.md](./realdwg-web/README.md): 解析核心 API 与许可证说明
 
 ## 注意事项
 
 1. 两个子目录是普通目录(随本仓库一起提交),改动直接在本仓库内提交。
-2. `cad-viewer/pnpm-workspace.yaml` 的本地 overrides 属于开发期配置,**发布或推送到独立 CI 前必须还原**(见上文)。cad-viewer 自带的 `.gitlab-ci.yml` 假设独立检出、依赖 npm 源,在还原 overrides 前不要直接使用。
-3. 本机为软件渲染环境(无真实 GPU),渲染类优化(如大坐标原点平移)需在真实 GPU 环境验证。
+2. `cad-viewer/pnpm-workspace.yaml` 的本地 overrides 属于开发期配置,**发布或推送到独立 CI 前必须还原**。
+3. 本机为软件渲染环境(无真实 GPU),渲染类优化需在真实 GPU 环境验证。
 
 ## License
 
-本工作区仅聚合上游项目,不改变其许可证:
-
-- [cad-viewer](./cad-viewer/LICENSE):MIT
-- [realdwg-web](./realdwg-web/LICENSE):MIT 为主,其中 `@mlightcad/libredwg-converter` 为 GPL-3.0
-  (LibreDWG 解析器需以独立 Web Worker 方式部署以隔离许可证,详见其 README)
+- [cad-viewer](./cad-viewer/LICENSE): MIT
+- [realdwg-web](./realdwg-web/LICENSE): MIT 为主, `@mlightcad/libredwg-converter` 为 GPL-3.0

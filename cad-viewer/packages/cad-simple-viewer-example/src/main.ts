@@ -10,9 +10,10 @@ import {
   AcApOpenDatabaseOptions,
   AcApQNewCmd,
   AcApSettingManager,
-  acedApplyUiTheme,
   acedIsCompactUiLayout,
+  type AcEdUiTheme,
   AcEdOpenMode,
+  DXF_PARSER_WORKER_FILE,
   LIBREDWG_PARSER_WORKER_FILE,
   MTEXT_RENDERER_WORKER_FILE
 } from '@mlightcad/cad-simple-viewer'
@@ -34,6 +35,8 @@ import {
 import { setupFileSidebarResize } from './fileSidebarResize'
 import { registerLazyPlugins } from './register'
 import { registerLibreDwgConverter } from './registerLibreDwg'
+import { registerNativeDxfConverter } from './registerNativeDxf'
+import { ShellUiThemeController } from './uiThemeController'
 
 const EXAMPLE_COMMAND_ALIASES = {
   LINE: ['LX'],
@@ -118,6 +121,8 @@ class CadViewerApp {
   private viewerToolbarPlacementButtons: NodeListOf<HTMLButtonElement>
   private devToolbar: HTMLElement
   private devNewButton: HTMLButtonElement
+  private themeToggleButton: HTMLButtonElement
+  private themeController: ShellUiThemeController
   private displayMenuOpen = false
   private dockMenuOpen = false
   private demoDockTabCount = 0
@@ -208,6 +213,26 @@ class CadViewerApp {
     this.devNewButton = document.getElementById(
       'devNewButton'
     ) as HTMLButtonElement
+    this.themeToggleButton = document.getElementById(
+      'devThemeToggle'
+    ) as HTMLButtonElement
+
+    this.themeController = new ShellUiThemeController(
+      this.viewerPane,
+      () => {
+        // AcApDocManager.instance throws before createInstance() runs
+        try {
+          return AcApDocManager.instance.curDocument?.database
+        } catch {
+          return undefined
+        }
+      },
+      theme => this.updateThemeToggleLabel(theme)
+    )
+    this.themeController.start()
+    this.themeToggleButton.addEventListener('click', () => {
+      this.themeController.toggle()
+    })
 
     this.setupFileHandling()
     this.setupPredefinedFileActions()
@@ -770,6 +795,11 @@ class CadViewerApp {
     this.syncDisplayMenuState()
   }
 
+  private updateThemeToggleLabel(theme: AcEdUiTheme) {
+    this.themeToggleButton.textContent =
+      theme === 'dark' ? 'Theme: Dark' : 'Theme: Light'
+  }
+
   private getSimpleUiPlugin(): AcApSimpleUiPlugin | undefined {
     if (!this.isInitialized) return undefined
     return AcApDocManager.instance.pluginManager.getPlugin(
@@ -794,12 +824,13 @@ class CadViewerApp {
     if (this.isInitialized) return
 
     try {
-      acedApplyUiTheme('dark', this.viewerPane)
-
       const openProf = isOpenProfMode()
       const useWorkers = openProf ? isWorkerOpenMode() : true
       const dwgParserUrl = `./workers/${LIBREDWG_PARSER_WORKER_FILE}`
       registerLibreDwgConverter(dwgParserUrl)
+      // DXF tokenizes in its parser worker when the bundle is deployed.
+      const dxfParserUrl = `./workers/${DXF_PARSER_WORKER_FILE}`
+      registerNativeDxfConverter(dxfParserUrl)
       AcApDocManager.createInstance({
         container: this.container,
         busyIndicatorHost: this.viewerPane,
@@ -818,7 +849,8 @@ class CadViewerApp {
         },
         webworkerFileUrls: {
           mtextRender: `./workers/${MTEXT_RENDERER_WORKER_FILE}`,
-          dwgParser: dwgParserUrl
+          dwgParser: dwgParserUrl,
+          dxfParser: dxfParserUrl
         }
       })
       if (openProf) {
@@ -850,8 +882,15 @@ class CadViewerApp {
       ) as AcApSimpleUiPlugin
       setupAgentIntegration(plugin)
 
+      // The plugin theme sync just applied the session COLORTHEME default
+      // (dark) to the viewer pane; re-assert the stored shell theme.
+      this.themeController.syncActiveDocument()
+
       AcApDocManager.instance.events.documentActivated.addEventListener(
         args => {
+          // COLORTHEME is session-scoped and defaults to dark; re-assert the
+          // shell theme so the plugin chrome follows the stored preference.
+          this.themeController.syncActiveDocument()
           document.title = args.doc.docTitle
           this.onFileOpened()
           this.finishLoadingState()

@@ -35,6 +35,15 @@ export type {
   AcDbDxfPairReader
 } from './AcDbDxfPairReader'
 export {
+  acdbDrainDxfPairs,
+  acdbDxfPairWireTransferables,
+  acdbMakeDxfPairArrayReader
+} from './AcDbDxfPairWire'
+export type {
+  AcDbDxfPairDrainOptions,
+  AcDbDxfPairWireData
+} from './AcDbDxfPairWire'
+export {
   ACDB_DXF_MTEXT_CHUNK_CHARS,
   ACDB_DXF_XDATA_BINARY_MAX_BYTES,
   ACDB_DXF_XDATA_STRING_MAX_BYTES,

@@ -6,6 +6,8 @@ import { defineConfig } from 'vite'
 import { viteStaticCopy } from 'vite-plugin-static-copy'
 import { exampleRollupOutput } from '../vite-config/pluginRollupOutput'
 import {
+  DATA_MODEL_PACKAGE,
+  DXF_PARSER_WORKER_FILE,
   LIBREDWG_CONVERTER_PACKAGE,
   LIBREDWG_PARSER_WASM_FILE,
   LIBREDWG_PARSER_WORKER_FILE,
@@ -65,6 +67,11 @@ export default defineConfig(() => {
         targets: [
           {
             src: `./node_modules/@mlightcad/cad-simple-viewer/dist/${MTEXT_RENDERER_WORKER_FILE}`,
+            dest: 'workers',
+            rename: { stripBase: true }
+          },
+          {
+            src: `./node_modules/${DATA_MODEL_PACKAGE}/dist/${DXF_PARSER_WORKER_FILE}`,
             dest: 'workers',
             rename: { stripBase: true }
           },

@@ -30,6 +30,8 @@
     "format": "prettier --config ./.prettierrc.js --write \"packages/**/*.{ts,js,vue,json}\"",
     "lint": "nx run-many -t lint",
     "lint:fix": "nx run-many -t lint:fix",
+    "deps:check": "node scripts/check-local-deps.mjs",
+    "deps:fix": "node scripts/check-local-deps.mjs --fix",
     "postinstall": "node scripts/check-local-deps.mjs --warn",
     "prebuild": "node scripts/check-local-deps.mjs",
     "predev": "node scripts/check-local-deps.mjs",

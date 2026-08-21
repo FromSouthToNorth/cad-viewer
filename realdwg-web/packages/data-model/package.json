@@ -38,10 +38,11 @@
     "analyze": "pnpm run analyze:lib",
     "analyze:lib": "vite build --mode analyze --config vite.config.main.ts",
     "clean": "rimraf dist lib tsconfig.tsbuildinfo",
-    "build": "tsc && pnpm run build:lib",
+    "build": "tsc && pnpm run build:lib && pnpm run build:worker",
     "build:lib": "vite build --config vite.config.main.ts",
     "lint": "eslint src/",
-    "lint:fix": "eslint --fix --quiet src/"
+    "lint:fix": "eslint --fix --quiet src/",
+    "build:worker": "vite build --config vite.config.worker.ts"
   },
   "dependencies": {
     "@mlightcad/common": "workspace:*",

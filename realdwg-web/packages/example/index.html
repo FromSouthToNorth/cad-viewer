@@ -1,19 +1,42 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="UTF-8" />
   <title>realdwg-web + data-model (TS)</title>
+  <script>
+    // Apply the persisted UI theme before first paint to avoid a flash.
+    ;(function () {
+      var theme = 'light'
+      try {
+        var stored = window.localStorage.getItem('realdwg-web-example:ui-theme')
+        if (stored === 'light' || stored === 'dark') theme = stored
+      } catch (e) { /* storage unavailable */ }
+      document.documentElement.setAttribute('data-theme', theme)
+    })()
+  </script>
   <style>
     :root {
       --tab-border: #dadada;
       --tab-active: #202124;
       --tab-muted: #5f6368;
       --tab-bg: #f8f9fa;
+      --page-bg: #ffffff;
+      --header-bg: #f3f4f6;
+    }
+    :root[data-theme='dark'] {
+      color-scheme: dark;
+      --tab-border: #4c4d4f;
+      --tab-active: #e5eaf3;
+      --tab-muted: #a3a6ad;
+      --tab-bg: #262727;
+      --page-bg: #141414;
+      --header-bg: #262727;
     }
     body {
       font-family: system-ui, sans-serif;
       margin: 16px;
-      color: #202124;
+      color: var(--tab-active);
+      background: var(--page-bg);
     }
     .tabs {
       display: flex;
@@ -40,8 +63,24 @@
     .tab-button[aria-selected="true"] {
       color: var(--tab-active);
       font-weight: 600;
-      background: #fff;
+      background: var(--page-bg);
       border-color: var(--tab-border);
+    }
+    .theme-toggle {
+      margin-left: auto;
+      margin-bottom: 2px;
+      align-self: center;
+      border: 1px solid var(--tab-border);
+      border-radius: 999px;
+      background: transparent;
+      color: var(--tab-muted);
+      padding: 4px 12px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .theme-toggle:hover {
+      color: var(--tab-active);
+      background: var(--tab-bg);
     }
     .tab-panel[hidden] {
       display: none;
@@ -54,7 +93,7 @@
     }
     .panel-intro {
       max-width: 720px;
-      color: #444;
+      color: var(--tab-muted);
       margin-top: 0;
     }
   </style>
@@ -82,6 +121,14 @@
       data-tab="pat"
     >
       PAT Parse Demo
+    </button>
+    <button
+      id="themeToggle"
+      class="theme-toggle"
+      type="button"
+      aria-label="Toggle UI theme"
+    >
+      Theme: Light
     </button>
   </nav>
 

@@ -596,6 +596,91 @@ const isValidFile = (file: File): boolean => {
   color: #4f5fd0;
 }
 
+/* Dark theme overrides (Element Plus dark palette) */
+:root[data-ml-ui-theme='dark'] .upload-panel {
+  background: #1d1e1f;
+  box-shadow:
+    0 20px 40px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+:root[data-ml-ui-theme='dark'] .upload-title {
+  color: #e5eaf3;
+}
+
+:root[data-ml-ui-theme='dark'] .upload-subtitle {
+  color: #a3a6ad;
+}
+
+:root[data-ml-ui-theme='dark'] .upload-divider {
+  color: #8a8f99;
+}
+
+:root[data-ml-ui-theme='dark'] .upload-divider::before,
+:root[data-ml-ui-theme='dark'] .upload-divider::after {
+  background: #414243;
+}
+
+:root[data-ml-ui-theme='dark'] .upload-dropzone :deep(.el-upload-dragger) {
+  border-color: #4c4d4f;
+  background: #262727;
+}
+
+:root[data-ml-ui-theme='dark'] .upload-dropzone :deep(.el-upload-dragger:hover) {
+  border-color: #589ef8;
+  background: #2b3139;
+  box-shadow: inset 0 0 0 1px rgba(88, 158, 248, 0.12);
+}
+
+:root[data-ml-ui-theme='dark'] .dropzone-title {
+  color: #e5eaf3;
+}
+
+:root[data-ml-ui-theme='dark'] .dropzone-link {
+  color: #79aefc;
+}
+
+:root[data-ml-ui-theme='dark'] .format-tag {
+  background: rgba(102, 126, 234, 0.18);
+  color: #a8b8f0;
+}
+
+:root[data-ml-ui-theme='dark'] .settings-section {
+  background: #141414;
+  border-left-color: #414243;
+}
+
+:root[data-ml-ui-theme='dark'] .settings-title {
+  color: #cfd3dc;
+}
+
+:root[data-ml-ui-theme='dark'] .setting-label {
+  color: #8a8f99;
+}
+
+:root[data-ml-ui-theme='dark'] .pill-segment {
+  border-color: #414243;
+  background: #1d1e1f;
+}
+
+:root[data-ml-ui-theme='dark'] .pill-option {
+  color: #a3a6ad;
+}
+
+:root[data-ml-ui-theme='dark'] .pill-option:not(:last-child) {
+  border-right-color: #414243;
+}
+
+:root[data-ml-ui-theme='dark'] .pill-option:hover:not(.is-active) {
+  background: #262727;
+  color: #cfd3dc;
+}
+
+:root[data-ml-ui-theme='dark'] .pill-option.is-active {
+  background: rgba(88, 158, 248, 0.15);
+  color: #79aefc;
+}
+
 /* Narrow viewports: stack upload + settings as two vertical rows */
 @media (max-width: 768px) {
   .file-upload-container {
@@ -611,6 +696,10 @@ const isValidFile = (file: File): boolean => {
   .settings-section {
     border-left: none;
     border-top: 1px solid #e8edf5;
+  }
+
+  :root[data-ml-ui-theme='dark'] .settings-section {
+    border-top-color: #414243;
   }
 
   .settings-grid {
