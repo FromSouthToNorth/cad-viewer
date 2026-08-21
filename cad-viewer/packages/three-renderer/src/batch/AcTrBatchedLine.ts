@@ -224,6 +224,7 @@ export class AcTrBatchedLine extends AcTrBatchedLineBase {
     this.position.set(0, 0, 0)
     this._geometryInitialized = false
     this.geometry.dispose()
+    this.invalidateFrustumBounds()
   }
 
   /**
@@ -463,6 +464,7 @@ export class AcTrBatchedLine extends AcTrBatchedLineBase {
       'AcTrBatchedLine',
       geometryId
     )
+    this.invalidateFrustumBounds()
 
     return geometryId
   }
@@ -559,6 +561,7 @@ export class AcTrBatchedLine extends AcTrBatchedLineBase {
       for (let i = nextIndexStart; i < indexArray.length; i++) {
         indexArray[i] = 0
       }
+      indexAttr.addUpdateRange(nextIndexStart, indexArray.length - nextIndexStart)
       indexAttr.needsUpdate = true
     }
 
@@ -578,6 +581,7 @@ export class AcTrBatchedLine extends AcTrBatchedLineBase {
     this._availableGeometryIds.length = 0
 
     syncBatchDrawVisibilityAfterOptimize(geometry, this._geometryInfo)
+    this.invalidateFrustumBounds()
 
     return this
   }

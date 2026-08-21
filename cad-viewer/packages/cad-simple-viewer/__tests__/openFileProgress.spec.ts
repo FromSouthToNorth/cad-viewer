@@ -57,4 +57,27 @@ describe('isOpenFileProgressComplete', () => {
       })
     ).toBe(true)
   })
+
+  it('detects terminal statuses regardless of the weighted percentage', () => {
+    // After re-weighting, a terminal FETCH_FILE END event reports ~10, and a
+    // mid-CONVERSION event may still reach a high raw value — neither may
+    // decide completion.
+    expect(
+      isOpenFileProgressComplete({
+        database: {},
+        percentage: 10,
+        stage: 'FETCH_FILE',
+        subStageStatus: 'END'
+      })
+    ).toBe(true)
+    expect(
+      isOpenFileProgressComplete({
+        database: {},
+        percentage: 100,
+        stage: 'CONVERSION',
+        subStage: 'ENTITY',
+        subStageStatus: 'IN-PROGRESS'
+      })
+    ).toBe(false)
+  })
 })

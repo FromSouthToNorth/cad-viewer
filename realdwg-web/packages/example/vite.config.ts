@@ -21,6 +21,11 @@ export default defineConfig({
           dest: 'assets'
         },
         {
+          // DXF tokenizer worker shipped by @mlightcad/data-model.
+          src: './node_modules/@mlightcad/data-model/dist/dxf-parser-worker.js',
+          dest: 'assets'
+        },
+        {
           // Sibling of libredwg-parser-worker.js (not inlined; see cad-viewer#494).
           // Required: missing wasm must fail the copy, not be skipped silently.
           src: './node_modules/@mlightcad/libredwg-converter/dist/libredwg-web.wasm',

@@ -37,6 +37,12 @@ export interface AcTrMaterialMetadata extends AcTrByLayerBindingFlags {
   drawOrder?: number
   /** Culling side used by fill materials. Present only when explicitly set. */
   side?: 'front' | 'back'
+  /**
+   * True when the material is owned by a style-manager cache and shared
+   * across entities and batches. {@link AcTrEntity.disposeObject} must skip
+   * disposing shared materials — the cache owns their lifecycle.
+   */
+  isShared?: boolean
 }
 
 /**

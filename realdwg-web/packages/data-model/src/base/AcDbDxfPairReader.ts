@@ -100,13 +100,23 @@ export function acdbPeekDxfHeaderInfo(buffer: ArrayBuffer): AcDbDxfHeaderInfo {
   return { version, encoding }
 }
 
-function decodeHexBinary(hex: string): Uint8Array {
-  const trimmed = hex.trim()
-  const byteLength = trimmed.length >>> 1
+/**
+ * Decodes a hex pair value straight from the span. Trims exactly the
+ * characters `String.prototype.trim` strips (see `acdbIsTrimWhitespace`),
+ * so it matches the previous `decodeHexBinary(slice)` byte for byte.
+ */
+function acdbDecodeHexBinarySpan(
+  text: string,
+  start: number,
+  end: number
+): Uint8Array {
+  while (start < end && acdbIsTrimWhitespace(text.charCodeAt(start))) start++
+  while (end > start && acdbIsTrimWhitespace(text.charCodeAt(end - 1))) end--
+  const byteLength = (end - start) >>> 1
   const bytes = new Uint8Array(byteLength)
   for (let j = 0; j < byteLength; j++) {
-    const hi = HEX_NIBBLE[trimmed.charCodeAt(j * 2) & 0x7f]!
-    const lo = HEX_NIBBLE[trimmed.charCodeAt(j * 2 + 1) & 0x7f]!
+    const hi = HEX_NIBBLE[text.charCodeAt(start + j * 2) & 0x7f]!
+    const lo = HEX_NIBBLE[text.charCodeAt(start + j * 2 + 1) & 0x7f]!
     bytes[j] = (hi << 4) | lo
   }
   return bytes
@@ -177,46 +187,245 @@ function acdbReadDxfCodeFromChars(
 }
 
 /** Equivalent to `trimmed !== '' && trimmed !== '0'` without allocating. */
-function acdbDxfRawBoolIsTrue(valueRaw: string): boolean {
-  let start = 0
-  let end = valueRaw.length
-  while (start < end && acdbIsTrimWhitespace(valueRaw.charCodeAt(start))) start++
-  while (end > start && acdbIsTrimWhitespace(valueRaw.charCodeAt(end - 1))) end--
+function acdbDxfRawBoolIsTrue(
+  text: string,
+  start: number,
+  end: number
+): boolean {
+  while (start < end && acdbIsTrimWhitespace(text.charCodeAt(start))) start++
+  while (end > start && acdbIsTrimWhitespace(text.charCodeAt(end - 1))) end--
   if (start >= end) return false
-  return !(end - start === 1 && valueRaw.charCodeAt(start) === 0x30)
+  return !(end - start === 1 && text.charCodeAt(start) === 0x30)
 }
 
 /**
- * Returns the raw value as-is when it has no surrounding whitespace (the
- * common case), otherwise a trimmed copy. Handle strings feed map keys and
- * hex parsers, so they must never carry surrounding whitespace.
+ * Fast path for `double` value lines: parses `[+-]?digits[.digits][eE[+-]digits]`
+ * straight from the span, without slicing the line or calling `Number()`.
+ *
+ * Exactness: the mantissa is accumulated as an integer double (exact while it
+ * has at most 15 significant digits, since 10^15 - 1 < 2^53) and the power-of-ten
+ * scale is built by repeated multiplication (exact for |exp| <= 22, since
+ * 10^22 < 2^53). Multiplying or dividing two exact doubles rounds exactly once,
+ * so the result is the same correctly-rounded value `Number()` produces for the
+ * whole line. Any input outside that domain — more than 15 significant digits,
+ * |effective exponent| > 22, hex/word literals, garbage — returns `undefined`
+ * and the caller falls back to `slice` + `Number`.
  */
-function acdbDxfHandleValue(valueRaw: string): string {
-  const len = valueRaw.length
-  if (len > 0) {
-    const first = valueRaw.charCodeAt(0)
-    const last = valueRaw.charCodeAt(len - 1)
-    if (!acdbIsTrimWhitespace(first) && !acdbIsTrimWhitespace(last)) {
-      return valueRaw
+function acdbParseDoubleSpan(
+  text: string,
+  start: number,
+  end: number
+): number | undefined {
+  let i = start
+  while (i < end && acdbIsTrimWhitespace(text.charCodeAt(i))) i++
+  if (i >= end) return 0
+
+  let sign = 1
+  const c0 = text.charCodeAt(i)
+  if (c0 === 0x2d) {
+    sign = -1
+    i++
+  } else if (c0 === 0x2b) {
+    i++
+  }
+
+  let mantissa = 0
+  let digits = 0
+  let exp10 = 0
+  let anyDigit = false
+  let tooLong = false
+
+  while (i < end) {
+    const c = text.charCodeAt(i)
+    if (c < 0x30 || c > 0x39) break
+    anyDigit = true
+    i++
+    if (mantissa === 0 && c === 0x30) continue
+    if (digits >= 15) {
+      tooLong = true
+      continue
+    }
+    mantissa = mantissa * 10 + (c - 0x30)
+    digits++
+  }
+
+  if (i < end && text.charCodeAt(i) === 0x2e) {
+    i++
+    while (i < end) {
+      const c = text.charCodeAt(i)
+      if (c < 0x30 || c > 0x39) break
+      anyDigit = true
+      i++
+      if (mantissa === 0 && c === 0x30) {
+        exp10--
+        continue
+      }
+      if (digits >= 15) {
+        tooLong = true
+        continue
+      }
+      mantissa = mantissa * 10 + (c - 0x30)
+      digits++
+      exp10--
     }
   }
-  return valueRaw.trim()
+
+  if (i < end && (text.charCodeAt(i) === 0x65 || text.charCodeAt(i) === 0x45)) {
+    i++
+    let expSign = 1
+    const sc = text.charCodeAt(i)
+    if (sc === 0x2d) {
+      expSign = -1
+      i++
+    } else if (sc === 0x2b) {
+      i++
+    }
+    let expVal = 0
+    let expDigits = 0
+    while (i < end) {
+      const c = text.charCodeAt(i)
+      if (c < 0x30 || c > 0x39) break
+      i++
+      expDigits++
+      if (expVal <= 10000) expVal = expVal * 10 + (c - 0x30)
+    }
+    if (expDigits === 0) return undefined
+    exp10 += expSign * expVal
+  }
+
+  // The rest of the line must be whitespace: `Number()` trims the ends but
+  // rejects interior garbage, and hex/binary/octal literals like `0x1A`.
+  while (i < end) {
+    if (!acdbIsTrimWhitespace(text.charCodeAt(i))) return undefined
+    i++
+  }
+
+  // Every digit-less value `Number()` accepts ('', whitespace, 'Infinity',
+  // 'NaN', …) maps to 0 through the finite check; a bare sign maps to NaN.
+  // Both yield +0 (Number('-') is NaN → 0), while '-0.0' keeps its sign.
+  if (!anyDigit) return 0
+
+  if (tooLong) return undefined
+  if (mantissa === 0) return sign * mantissa
+
+  if (exp10 > 22 || exp10 < -22) return undefined
+
+  let scale = 1
+  const k = exp10 < 0 ? -exp10 : exp10
+  for (let n = 0; n < k; n++) scale *= 10
+  return sign * (exp10 < 0 ? mantissa / scale : mantissa * scale)
 }
 
-function parseAsciiValue(code: number, valueRaw: string): AcDbDxfPair | null {
+/**
+ * Fast path for `int` value lines with `parseInt(slice, 10)` semantics:
+ * skips leading whitespace, takes the longest digit run, ignores the rest.
+ * Returns `undefined` for digit runs longer than 15 (the caller falls back to
+ * `slice` + `parseInt` to keep the float rounding identical).
+ */
+function acdbParseIntSpan(
+  text: string,
+  start: number,
+  end: number
+): number | undefined {
+  let i = start
+  while (i < end && acdbIsTrimWhitespace(text.charCodeAt(i))) i++
+
+  let sign = 1
+  const c0 = text.charCodeAt(i)
+  if (c0 === 0x2d) {
+    sign = -1
+    i++
+  } else if (c0 === 0x2b) {
+    i++
+  }
+
+  let value = 0
+  let digits = 0
+  let anyDigit = false
+  while (i < end) {
+    const c = text.charCodeAt(i)
+    if (c < 0x30 || c > 0x39) break
+    i++
+    anyDigit = true
+    if (value === 0 && c === 0x30) continue
+    if (digits >= 15) return undefined
+    value = value * 10 + (c - 0x30)
+    digits++
+  }
+  // parseInt('-') is NaN → +0, parseInt('-0') is -0: keep the sign only
+  // when at least one digit was consumed.
+  return anyDigit ? sign * value : 0
+}
+
+/**
+ * Fast path for `long` value lines with `Number(slice)` semantics (whole line
+ * must be numeric, unlike `parseInt`). Returns the integer when it has at most
+ * 15 significant digits (exact, always a safe integer); otherwise returns
+ * `undefined` and the caller falls back to the `Number`/`BigInt` path.
+ */
+function acdbParseLongSpan(
+  text: string,
+  start: number,
+  end: number
+): number | undefined {
+  let i = start
+  while (i < end && acdbIsTrimWhitespace(text.charCodeAt(i))) i++
+
+  let sign = 1
+  const c0 = text.charCodeAt(i)
+  if (c0 === 0x2d) {
+    sign = -1
+    i++
+  } else if (c0 === 0x2b) {
+    i++
+  }
+
+  let value = 0
+  let digits = 0
+  let anyDigit = false
+  while (i < end) {
+    const c = text.charCodeAt(i)
+    if (c < 0x30 || c > 0x39) break
+    i++
+    anyDigit = true
+    if (value === 0 && c === 0x30) continue
+    if (digits >= 15) return undefined
+    value = value * 10 + (c - 0x30)
+    digits++
+  }
+
+  while (i < end) {
+    if (!acdbIsTrimWhitespace(text.charCodeAt(i))) return undefined
+    i++
+  }
+  // Number('-') is NaN → 0 through the safe-integer fallback, Number('-0')
+  // is -0: keep the sign only when at least one digit was consumed.
+  return anyDigit ? sign * value : 0
+}
+
+function parseAsciiValueSpan(
+  code: number,
+  text: string,
+  start: number,
+  end: number
+): AcDbDxfPair | null {
   const type = acdbDxfValueType(code)
   if (type === 'comment') return null
 
   switch (type) {
     case 'string':
-      return { code, type, value: valueRaw }
+      return { code, type, value: text.slice(start, end) }
     case 'int': {
+      const fast = acdbParseIntSpan(text, start, end)
       // parseInt skips leading whitespace and stops at trailing garbage, so
       // the value line needs no trimmed copy here.
-      const n = parseInt(valueRaw, 10)
+      const n = fast === undefined ? parseInt(text.slice(start, end), 10) : fast
       return { code, type, value: Number.isFinite(n) ? n : 0 }
     }
     case 'long': {
+      const fast = acdbParseLongSpan(text, start, end)
+      if (fast !== undefined) return { code, type, value: fast }
+      const valueRaw = text.slice(start, end)
       const n = Number(valueRaw)
       if (Number.isSafeInteger(n)) return { code, type, value: n }
       try {
@@ -227,15 +436,23 @@ function parseAsciiValue(code: number, valueRaw: string): AcDbDxfPair | null {
       }
     }
     case 'double': {
-      const n = Number(valueRaw)
+      const fast = acdbParseDoubleSpan(text, start, end)
+      const n =
+        fast === undefined ? Number(text.slice(start, end)) : fast
       return { code, type, value: Number.isFinite(n) ? n : 0 }
     }
     case 'bool':
-      return { code, type, value: acdbDxfRawBoolIsTrue(valueRaw) }
-    case 'handle':
-      return { code, type, value: acdbDxfHandleValue(valueRaw) }
+      return { code, type, value: acdbDxfRawBoolIsTrue(text, start, end) }
+    case 'handle': {
+      const first = text.charCodeAt(start)
+      const last = text.charCodeAt(end - 1)
+      if (!acdbIsTrimWhitespace(first) && !acdbIsTrimWhitespace(last)) {
+        return { code, type, value: text.slice(start, end) }
+      }
+      return { code, type, value: text.slice(start, end).trim() }
+    }
     case 'binary':
-      return { code, type, value: decodeHexBinary(valueRaw) }
+      return { code, type, value: acdbDecodeHexBinarySpan(text, start, end) }
     default:
       return null
   }
@@ -270,11 +487,6 @@ export function acdbMakeAsciiDxfPairReader(text: string): AcDbDxfPairReader {
     return { start, end: contentEnd }
   }
 
-  function readLine(): string | undefined {
-    const span = readLineSpan()
-    return span ? text.slice(span.start, span.end) : undefined
-  }
-
   function readRaw(): AcDbDxfPair | undefined {
     for (;;) {
       const codeSpan = readLineSpan()
@@ -282,14 +494,14 @@ export function acdbMakeAsciiDxfPairReader(text: string): AcDbDxfPairReader {
       const code = acdbReadDxfCodeFromChars(text, codeSpan.start, codeSpan.end)
       if (Number.isNaN(code)) continue
       if (code === 999) {
-        if (readLine() === undefined) return undefined
+        if (readLineSpan() === undefined) return undefined
         continue
       }
 
-      const valueRaw = readLine()
-      if (valueRaw === undefined) return undefined
+      const valueSpan = readLineSpan()
+      if (valueSpan === undefined) return undefined
 
-      const pair = parseAsciiValue(code, valueRaw)
+      const pair = parseAsciiValueSpan(code, text, valueSpan.start, valueSpan.end)
       if (pair) return pair
     }
   }
@@ -324,27 +536,134 @@ function isUtf8Encoding(encoding: string): boolean {
 }
 
 /**
- * Bytes decoded per `TextDecoder` call in {@link acdbMakeUtf8AsciiDxfPairReader}.
+ * Returns whether the given encoding label is safe for line-aligned windowed
+ * decoding (see {@link acdbMakeWindowedAsciiDxfPairReader}).
+ *
+ * Excludes the UTF-16 family — 0x0A can occur as the low byte of any two-byte
+ * code unit — and any label `TextDecoder` does not recognize (unknown labels
+ * fall back to the full-decode path).
+ */
+export function acdbSupportsWindowedDecode(encoding: string): boolean {
+  const e = encoding.toLowerCase().replace(/_/g, '-')
+  if (
+    e === 'utf-16' ||
+    e === 'utf-16le' ||
+    e === 'utf-16be' ||
+    e === 'ucs-2' ||
+    e === 'ucs2'
+  ) {
+    return false
+  }
+  try {
+    new TextDecoder(encoding)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Bytes scanned by {@link acdbValidateUtf8Prefix} when a drawing declares a
+ * legacy codepage. Large enough that a real legacy-encoded file (GBK, Big5,
+ * Shift-JIS, …) fails validation with overwhelming probability, small enough
+ * that the scan stays negligible.
+ */
+export const UTF8_SNIFF_BYTES = 256 * 1024
+
+/**
+ * Strict RFC 3629 UTF-8 validation over a byte prefix, used to detect
+ * "UTF-8 bytes with a stale header" files — e.g. domestic tools that emit
+ * UTF-8 content but keep `$DWGCODEPAGE: ANSI_936` from a template while the
+ * `$ACADVER` predates the UTF-8 codepage.
+ *
+ * Returns `true` only when the whole scanned prefix is valid UTF-8 **and**
+ * contains at least one multi-byte sequence. Pure-ASCII prefixes return
+ * `false` so ASCII files keep their declared legacy codepage (the two
+ * decodings agree on ASCII anyway, and the windowed path must not needlessly
+ * change labels). Legacy encodings use trail bytes in [0x40, 0x7F] or lead
+ * bytes below 0xC2, which fail the continuation checks; a 256 KiB sample
+ * makes a false "valid UTF-8" verdict on a real GBK/Big5 file vanishingly
+ * unlikely.
+ *
+ * A multi-byte sequence straddling the end of the scan window is completed
+ * (up to 3 bytes past the window) so the verdict is not biased by the cut.
+ */
+export function acdbValidateUtf8Prefix(
+  bytes: Uint8Array,
+  maxBytes: number
+): boolean {
+  let limit = Math.min(bytes.length, maxBytes)
+  let multibyte = false
+  let i = 0
+  while (i < limit) {
+    const b = bytes[i]!
+    if (b < 0x80) {
+      i++
+      continue
+    }
+    let len: number
+    if (b >= 0xc2 && b <= 0xdf) len = 2
+    else if (b >= 0xe0 && b <= 0xef) len = 3
+    else if (b >= 0xf0 && b <= 0xf4) len = 4
+    else return false
+    if (i + len > bytes.length) return false
+    if (i + len > limit) limit = Math.min(i + len, bytes.length)
+    const c1 = bytes[i + 1]!
+    if (len === 3 && ((b === 0xe0 && c1 < 0xa0) || (b === 0xed && c1 > 0x9f))) {
+      return false
+    }
+    if (len === 4 && ((b === 0xf0 && c1 < 0x90) || (b === 0xf4 && c1 > 0x8f))) {
+      return false
+    }
+    for (let k = 1; k < len; k++) {
+      const c = bytes[i + k]!
+      if (c < 0x80 || c > 0xbf) return false
+    }
+    multibyte = true
+    i += len
+  }
+  return multibyte
+}
+
+/**
+ * Bytes decoded per `TextDecoder` call in {@link acdbMakeWindowedAsciiDxfPairReader}.
  *
  * Sized as a compromise: large enough that a multi-MB DXF costs hundreds of
  * decode calls rather than one per line, small enough that windows still holding
  * a retained value slice do not pin much memory.
  */
-const UTF8_DECODE_WINDOW_BYTES = 64 * 1024
+const WINDOWED_DECODE_WINDOW_BYTES = 64 * 1024
 
 /**
- * ASCII pair reader that decodes UTF-8 bytes one line-aligned window at a time,
- * instead of allocating a full-file decoded string (peak memory ≈ input bytes
- * plus one window).
+ * ASCII pair reader that decodes one line-aligned window at a time, instead of
+ * allocating a full-file decoded string (peak memory ≈ input bytes plus one
+ * window).
  *
- * Non-UTF-8 code pages still go through {@link acdbMakeAsciiDxfPairReader}
- * after a full `TextDecoder` pass.
+ * The byte-level window scan looks for 0x0A/0x0D line breaks, which can never
+ * occur inside a multi-byte sequence of any line-safe encoding: UTF-8
+ * continuation bytes are >= 0x80, GBK/Big5/Shift-JIS/EUC-KR trail bytes are
+ * >= 0x40, and the remaining code pages are single-byte. Each window therefore
+ * ends on a line break and decodes standalone without decoder state.
+ *
+ * Only pass encodings accepted by {@link acdbSupportsWindowedDecode};
+ * `acdbCreateDxfPairReader` is the gate for real-world files.
  */
-export function acdbMakeUtf8AsciiDxfPairReader(
-  bytes: Uint8Array
+export function acdbMakeWindowedAsciiDxfPairReader(
+  bytes: Uint8Array,
+  encoding: string
 ): AcDbDxfPairReader {
-  // Skip UTF-8 BOM when present.
+  if (!acdbSupportsWindowedDecode(encoding)) {
+    throw new Error(
+      `acdbMakeWindowedAsciiDxfPairReader: encoding '${encoding}' is not ` +
+        'safe for line-aligned windowed decoding'
+    )
+  }
+
+  // Skip the UTF-8 BOM when present (the other line-safe encodings have no
+  // BOM convention this reader needs to handle).
+  const utf8 = isUtf8Encoding(encoding)
   const start =
+    utf8 &&
     bytes.length >= 3 &&
     bytes[0] === 0xef &&
     bytes[1] === 0xbb &&
@@ -355,12 +674,12 @@ export function acdbMakeUtf8AsciiDxfPairReader(
   let lineNumber = 1
   let lookahead: AcDbDxfPair | undefined
   let lookaheadValid = false
-  const decoder = new TextDecoder('utf-8')
+  const decoder = new TextDecoder(encoding)
 
   // Decoded window covering bytes [windowStart, windowEnd), scanned by a
   // character cursor. Windows end just past a line break, and a break byte can
-  // never appear inside a multi-byte UTF-8 sequence, so each window decodes
-  // standalone and no line ever straddles two windows.
+  // never appear inside a multi-byte sequence of the encodings accepted here,
+  // so each window decodes standalone and no line ever straddles two windows.
   let windowStart = start
   let windowEnd = start
   let text = ''
@@ -370,7 +689,7 @@ export function acdbMakeUtf8AsciiDxfPairReader(
   function advanceWindow(): boolean {
     if (windowEnd >= bytes.length) return false
     windowStart = windowEnd
-    let end = Math.min(windowStart + UTF8_DECODE_WINDOW_BYTES, bytes.length)
+    let end = Math.min(windowStart + WINDOWED_DECODE_WINDOW_BYTES, bytes.length)
     while (end < bytes.length && bytes[end] !== 10 && bytes[end] !== 13) end++
     if (end < bytes.length && bytes[end] === 13) end++
     if (end < bytes.length && bytes[end] === 10) end++
@@ -400,11 +719,6 @@ export function acdbMakeUtf8AsciiDxfPairReader(
     return { start, end: contentEnd }
   }
 
-  function readLine(): string | undefined {
-    const span = readLineSpan()
-    return span ? text.slice(span.start, span.end) : undefined
-  }
-
   function readRaw(): AcDbDxfPair | undefined {
     for (;;) {
       const codeSpan = readLineSpan()
@@ -412,14 +726,14 @@ export function acdbMakeUtf8AsciiDxfPairReader(
       const code = acdbReadDxfCodeFromChars(text, codeSpan.start, codeSpan.end)
       if (Number.isNaN(code)) continue
       if (code === 999) {
-        if (readLine() === undefined) return undefined
+        if (readLineSpan() === undefined) return undefined
         continue
       }
 
-      const valueRaw = readLine()
-      if (valueRaw === undefined) return undefined
+      const valueSpan = readLineSpan()
+      if (valueSpan === undefined) return undefined
 
-      const pair = parseAsciiValue(code, valueRaw)
+      const pair = parseAsciiValueSpan(code, text, valueSpan.start, valueSpan.end)
       if (pair) return pair
     }
   }
@@ -453,6 +767,16 @@ export function acdbMakeUtf8AsciiDxfPairReader(
       return { line: lineNumber, byteOffset }
     }
   }
+}
+
+/**
+ * Backwards-compatible wrapper around {@link acdbMakeWindowedAsciiDxfPairReader}
+ * for UTF-8 input.
+ */
+export function acdbMakeUtf8AsciiDxfPairReader(
+  bytes: Uint8Array
+): AcDbDxfPairReader {
+  return acdbMakeWindowedAsciiDxfPairReader(bytes, 'utf-8')
 }
 
 function safeBigIntToNumber(v: bigint): number | bigint {
@@ -641,14 +965,24 @@ export interface AcDbCreateDxfPairReaderOptions {
   encoding?: string
   /** Force R12 1-byte group codes for binary DXF. */
   legacyR12?: boolean
+  /**
+   * When true (default) and the header declares a legacy codepage for a
+   * pre-2007 drawing, validate the byte prefix with
+   * {@link acdbValidateUtf8Prefix} and treat the file as UTF-8 when it passes.
+   * Covers "UTF-8 bytes with a stale header" files; set false to always trust
+   * the declared codepage.
+   */
+  sniffUtf8?: boolean
 }
 
 /**
  * Create a pair reader from DXF bytes (ASCII or binary).
  *
- * ASCII path: peek HEADER for version/codepage when needed. UTF-8 drawings
- * decode one line-aligned window at a time (no full-file string). Legacy code
- * pages still decode once via `TextDecoder`, then scan with a character cursor.
+ * ASCII path: peek HEADER for version/codepage when needed. Line-safe encodings
+ * (UTF-8, GBK, Big5, Shift-JIS, EUC-KR, single-byte code pages) decode one
+ * line-aligned window at a time (no full-file string). The UTF-16 family and
+ * unknown labels decode once via `TextDecoder`, then scan with a character
+ * cursor.
  */
 export function acdbCreateDxfPairReader(
   data: ArrayBuffer | Uint8Array,
@@ -687,6 +1021,7 @@ export function acdbCreateDxfPairReader(
       : bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
 
   let encoding = options.encoding
+  const autoDetected = encoding == null
   if (encoding == null) {
     const info = acdbPeekDxfHeaderInfo(buffer)
     // Pre-2007 drawings may declare a non-UTF-8 `$DWGCODEPAGE`.
@@ -701,10 +1036,24 @@ export function acdbCreateDxfPairReader(
     }
   }
 
-  if (isUtf8Encoding(encoding)) {
-    return acdbMakeUtf8AsciiDxfPairReader(bytes)
+  // Only sniff automatically detected legacy labels — an explicit
+  // `options.encoding` always wins. If the byte prefix is strictly valid
+  // UTF-8 with at least one multi-byte sequence, override the declared
+  // codepage (stale headers from tools that write UTF-8 content).
+  if (
+    autoDetected &&
+    !isUtf8Encoding(encoding) &&
+    options.sniffUtf8 !== false &&
+    acdbValidateUtf8Prefix(bytes, UTF8_SNIFF_BYTES)
+  ) {
+    encoding = 'utf-8'
   }
 
+  if (acdbSupportsWindowedDecode(encoding)) {
+    return acdbMakeWindowedAsciiDxfPairReader(bytes, encoding)
+  }
+
+  // UTF-16 family or unknown labels: decode the whole buffer in one pass.
   const text = new TextDecoder(encoding).decode(bytes)
   return acdbMakeAsciiDxfPairReader(text)
 }

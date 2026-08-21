@@ -6,14 +6,16 @@ import {
   type AcApLocale,
   AcEdOpenMode,
   AcTrView2d,
+  DXF_PARSER_WORKER_FILE,
   LIBREDWG_PARSER_WORKER_FILE,
   MTEXT_RENDERER_WORKER_FILE
 } from '@mlightcad/cad-simple-viewer'
 import { registerLazySvgPlugin } from '@mlightcad/cad-svg-plugin/register'
 import {
+  accmYieldForPaint,
   AcDbDatabaseConverterManager,
   AcDbFileType,
-  accmYieldForPaint
+  AcDbNativeDxfConverter
 } from '@mlightcad/data-model'
 import { AcDbLibreDwgConverter } from '@mlightcad/libredwg-converter'
 
@@ -192,6 +194,15 @@ async function ensureViewer(): Promise<void> {
       parserWorkerUrl: dwgParserUrl
     })
   )
+  const dxfParserUrl = `./workers/${DXF_PARSER_WORKER_FILE}`
+  AcDbDatabaseConverterManager.instance.register(
+    AcDbFileType.DXF,
+    new AcDbNativeDxfConverter({
+      convertByEntityType: false,
+      useWorker: true,
+      parserWorkerUrl: dxfParserUrl
+    })
+  )
   AcApDocManager.createInstance({
     container,
     width: 1280,
@@ -201,6 +212,7 @@ async function ensureViewer(): Promise<void> {
     useMainThreadDraw: true,
     webworkerFileUrls: {
       dwgParser: dwgParserUrl,
+      dxfParser: dxfParserUrl,
       mtextRender: `./workers/${MTEXT_RENDERER_WORKER_FILE}`
     }
   })

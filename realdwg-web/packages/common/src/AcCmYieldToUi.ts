@@ -6,27 +6,39 @@
 export const ACCM_DEFAULT_UI_YIELD_BUDGET_MS = 50
 
 /**
+ * True when the page is in a background tab (or no document exists, e.g. Node).
+ *
+ * In a hidden tab `requestAnimationFrame` is throttled to ~1fps or paused, so
+ * yields must fall back to timers there to keep cooperative parsing from
+ * stalling; foreground tabs keep rAF so each yield still produces a paint.
+ */
+function accmIsPageHidden(): boolean {
+  return (
+    typeof globalThis !== 'undefined' &&
+    (globalThis as { document?: { hidden?: boolean } }).document?.hidden === true
+  )
+}
+
+/**
  * Yields once to the event loop / next animation frame so the browser can
  * paint and handle input. Prefer this inside hot loops (time-gated via
  * {@link AcCmUiYieldGate}).
  *
- * Uses a single `requestAnimationFrame` when available (not a double-rAF),
- * falling back to `setTimeout(0)`.
+ * Uses a single `requestAnimationFrame` when available and the page is
+ * visible (not a double-rAF), falling back to `setTimeout(0)` — also in
+ * background tabs, where rAF is throttled.
  *
  * @returns Promise that resolves after one frame (or next timer tick).
  */
 export function accmYieldToUi(): Promise<void> {
   return new Promise(resolve => {
-    if (
-      typeof globalThis !== 'undefined' &&
-      typeof (globalThis as { requestAnimationFrame?: unknown })
-        .requestAnimationFrame === 'function'
-    ) {
-      ;(
-        globalThis as unknown as {
-          requestAnimationFrame: (cb: () => void) => number
-        }
-      ).requestAnimationFrame(() => resolve())
+    const raf = (
+      globalThis as unknown as {
+        requestAnimationFrame?: (cb: () => void) => number
+      }
+    ).requestAnimationFrame
+    if (typeof raf === 'function' && !accmIsPageHidden()) {
+      raf(() => resolve())
     } else {
       setTimeout(resolve, 0)
     }
@@ -36,22 +48,19 @@ export function accmYieldToUi(): Promise<void> {
 /**
  * Waits until after at least one paint (double rAF). Use sparingly — e.g. once
  * before a long sync stretch so a loading overlay can appear. Do not call this
- * per chunk on large files.
+ * per chunk on large files. In hidden tabs (no paint needed) this collapses to
+ * a single timer tick.
  *
  * @returns Promise that resolves after two animation frames (or one timer tick).
  */
 export function accmYieldForPaint(): Promise<void> {
   return new Promise(resolve => {
-    if (
-      typeof globalThis !== 'undefined' &&
-      typeof (globalThis as { requestAnimationFrame?: unknown })
-        .requestAnimationFrame === 'function'
-    ) {
-      const raf = (
-        globalThis as unknown as {
-          requestAnimationFrame: (cb: () => void) => number
-        }
-      ).requestAnimationFrame
+    const raf = (
+      globalThis as unknown as {
+        requestAnimationFrame?: (cb: () => void) => number
+      }
+    ).requestAnimationFrame
+    if (typeof raf === 'function' && !accmIsPageHidden()) {
       raf(() => raf(() => resolve()))
     } else {
       setTimeout(resolve, 0)

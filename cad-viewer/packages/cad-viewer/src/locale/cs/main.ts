@@ -953,6 +953,23 @@ export default {
       unlocked: 'Odemčená'
     }
   },
+  progress: {
+    start: 'Zahajuji načítání souboru…',
+    parse: 'Načítám soubor…',
+    font: 'Stahuji fonty potřebné pro tento výkres…',
+    ltype: 'Načítám typy čar…',
+    style: 'Načítám textové styly…',
+    dimstyle: 'Načítám kótovací styly…',
+    layer: 'Načítám hladiny…',
+    vport: 'Načítám výřezy…',
+    blockrecord: 'Načítám záznamy bloků…',
+    header: 'Načítám hlavičku…',
+    block: 'Načítám bloky…',
+    entity: 'Načítám objekty…',
+    object: 'Načítám pojmenované slovníky…',
+    rendering: 'Vykreslování výkresu ...',
+    end: 'Hotovo!'
+  },
   message: {
     loadingFonts: 'Načítám fonty…',
     loadingDwgConverter: 'Načítám převodník DWG…',

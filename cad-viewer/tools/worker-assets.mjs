@@ -18,6 +18,9 @@ export const LIBREDWG_PARSER_WASM_FILE = 'libredwg-web.wasm'
 /** MTEXT layout/shaping worker from `@mlightcad/mtext-renderer`. */
 export const MTEXT_RENDERER_WORKER_FILE = 'mtext-renderer-worker.js'
 
+/** DXF tokenizer worker from `@mlightcad/data-model`. */
+export const DXF_PARSER_WORKER_FILE = 'dxf-parser-worker.js'
+
 /**
  * Proprietary DWG parser worker from private package `@mlight-cad/dwg-converter`.
  * Optional — copied only when that package is resolvable (e.g. via local
@@ -34,3 +37,4 @@ export const DWG_PARSER_MAIN_FILE = 'dwg-parser-main.js'
 export const LIBREDWG_CONVERTER_PACKAGE = '@mlightcad/libredwg-converter'
 export const MTEXT_RENDERER_PACKAGE = '@mlightcad/mtext-renderer'
 export const DWG_CONVERTER_PACKAGE = '@mlight-cad/dwg-converter'
+export const DATA_MODEL_PACKAGE = '@mlightcad/data-model'

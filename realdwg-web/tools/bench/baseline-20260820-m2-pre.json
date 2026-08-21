@@ -1,0 +1,9 @@
+{
+  "date": "2026-08-20",
+  "milestone": "M2-pre",
+  "fixtures": {
+    "utf8-mixed-100000": { "entities": 100000, "bestMs": 731.93, "avgMs": 796.18, "peakHeapMB": 245.4 },
+    "gbk-lines-300000": { "entities": 303000, "bestMs": 2427.97, "avgMs": 2491.44, "peakHeapMB": 725.4 },
+    "ascii-lines-300000": { "entities": 300000, "bestMs": 2188.05, "avgMs": 2284.98, "peakHeapMB": 715.5 }
+  }
+}

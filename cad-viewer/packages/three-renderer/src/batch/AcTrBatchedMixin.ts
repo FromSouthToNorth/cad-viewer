@@ -6,7 +6,6 @@ import {
   AcTrBatchGeometryFlags,
   AcTrIndexedBatchGeometryInfo,
   AcTrVertexBatchGeometryInfo,
-  ascIdSort,
   copyAttributeData,
   isBatchGeometryActive,
   isBatchGeometryVisible,
@@ -207,14 +206,80 @@ export function validateGeometry(
 }
 
 /**
+ * Pushes one freed geometry id onto the binary min-heap stored in the same
+ * array, keeping the smallest id at the root (index 0).
+ *
+ * @param availableGeometryIds - Heap-backed pool of ids freed by deletion.
+ * @param geometryId - Freed id to insert.
+ */
+export function pushAvailableGeometryId(
+  availableGeometryIds: number[],
+  geometryId: number
+) {
+  let i = availableGeometryIds.length
+  availableGeometryIds.push(geometryId)
+  while (i > 0) {
+    const parent = (i - 1) >> 1
+    if (availableGeometryIds[parent] <= availableGeometryIds[i]) break
+    const temp = availableGeometryIds[parent]
+    availableGeometryIds[parent] = availableGeometryIds[i]
+    availableGeometryIds[i] = temp
+    i = parent
+  }
+}
+
+/**
+ * Pops the smallest freed geometry id from the binary min-heap.
+ *
+ * The heap must be non-empty.
+ *
+ * @param availableGeometryIds - Heap-backed pool of freed ids.
+ * @returns The smallest available id.
+ */
+export function popAvailableGeometryId(
+  availableGeometryIds: number[]
+): number {
+  const top = availableGeometryIds[0]
+  const last = availableGeometryIds.pop() as number
+  if (availableGeometryIds.length > 0) {
+    availableGeometryIds[0] = last
+    let i = 0
+    for (;;) {
+      const left = i * 2 + 1
+      const right = left + 1
+      let smallest = i
+      if (
+        left < availableGeometryIds.length &&
+        availableGeometryIds[left] < availableGeometryIds[smallest]
+      ) {
+        smallest = left
+      }
+      if (
+        right < availableGeometryIds.length &&
+        availableGeometryIds[right] < availableGeometryIds[smallest]
+      ) {
+        smallest = right
+      }
+      if (smallest === i) break
+      const temp = availableGeometryIds[smallest]
+      availableGeometryIds[smallest] = availableGeometryIds[i]
+      availableGeometryIds[i] = temp
+      i = smallest
+    }
+  }
+  return top
+}
+
+/**
  * Reserves a geometry id slot for insertion, reusing deleted ids when
  * available.
  *
- * Deleted slots are tracked in `availableGeometryIds` and sorted ascending
- * before reuse so lower ids are consumed first, keeping id density compact.
+ * Deleted slots are tracked as a binary min-heap in `availableGeometryIds` so
+ * the smallest id is always reused first (keeping id density compact) without
+ * the O(n log n) sort cost of the previous implementation.
  *
  * @typeParam T - Geometry-info record type stored per slot.
- * @param availableGeometryIds - Pool of ids freed by {@link deleteGeometryById}.
+ * @param availableGeometryIds - Heap-backed pool of ids freed by {@link deleteGeometryById}.
  * @param geometryInfoList - Mutable array of per-slot mapping records.
  * @param geometryCount - Current number of allocated ids (may exceed active count).
  * @param geometryInfo - New record to assign to the reserved slot.
@@ -230,8 +295,7 @@ export function reserveGeometryId<T>(
   let nextGeometryCount = geometryCount
 
   if (availableGeometryIds.length > 0) {
-    availableGeometryIds.sort(ascIdSort)
-    geometryId = availableGeometryIds.shift() as number
+    geometryId = popAvailableGeometryId(availableGeometryIds)
     geometryInfoList[geometryId] = geometryInfo
   } else {
     geometryId = geometryCount
@@ -370,7 +434,7 @@ export function deleteGeometryById<T extends AcTrBatchGeometryLike>(
   }
 
   geometryInfoList[geometryId].flags = AcTrBatchGeometryFlags.None
-  availableGeometryIds.push(geometryId)
+  pushAvailableGeometryId(availableGeometryIds, geometryId)
   return true
 }
 
@@ -711,6 +775,27 @@ export type AcTrBatchedMixinOptions<TInfo extends AcTrBatchGeometryLike> = {
 }
 
 /**
+ * Global kill switch for batched frustum culling (A/B benchmarks and
+ * rollback). When disabled, batches keep `frustumCulled = false` exactly
+ * like before culling support existed.
+ */
+let _batchFrustumCullingEnabled = true
+
+/**
+ * Enables or disables batched frustum culling globally.
+ */
+export function acTrSetBatchFrustumCullingEnabled(enabled: boolean): void {
+  _batchFrustumCullingEnabled = enabled
+}
+
+/**
+ * Returns whether batched frustum culling is currently enabled.
+ */
+export function acTrIsBatchFrustumCullingEnabled(): boolean {
+  return _batchFrustumCullingEnabled
+}
+
+/**
  * Creates a reusable mixin that implements shared behavior for batched render
  * objects (visibility, bounds aggregation, id lifecycle, and raycast flow).
  *
@@ -730,6 +815,11 @@ export function createAcTrBatchedMixin<
   TBase extends Constructor<AcTrBatchBaseObject> =
     Constructor<AcTrBatchBaseObject>
 >(Base: TBase, options: AcTrBatchedMixinOptions<TInfo>) {
+  // Built-in prototype hooks (LineSegments2.prototype.onBeforeRender refreshes
+  // the LineMaterial resolution uniforms) must keep running once instances
+  // install their own onBeforeRender field.
+  const baseOnBeforeRender = Base.prototype.onBeforeRender
+
   /**
    * Base class produced by {@link createAcTrBatchedMixin}.
    *
@@ -741,6 +831,41 @@ export function createAcTrBatchedMixin<
     boundingBox: THREE.Box3 | null = null
     /** Aggregate bounding sphere across all active packed geometries. */
     boundingSphere: THREE.Sphere | null = null
+    /**
+     * True while packed vertex data changed since the last frustum-bounds
+     * sync; `frustumCulled` stays `false` (conservative full draw) until the
+     * next {@link syncFrustumBounds}.
+     */
+    _frustumBoundsDirty = true
+
+    /**
+     * three.js render hook: chains the base class prototype hook (e.g.
+     * `LineSegments2.prototype.onBeforeRender`, which refreshes the
+     * LineMaterial resolution uniforms) and then syncs the aggregate bounding
+     * sphere into `geometry.boundingSphere` before the first render after a
+     * geometry change, enabling frustum culling. Kept as a field initializer
+     * (not a method override) so `installBatchHighlightRenderer` can chain it
+     * further.
+     */
+    onBeforeRender = (
+      renderer: THREE.WebGLRenderer,
+      scene: THREE.Scene,
+      camera: THREE.Camera,
+      geometry: THREE.BufferGeometry,
+      material: THREE.Material,
+      group: THREE.Group
+    ) => {
+      baseOnBeforeRender?.call(
+        this,
+        renderer,
+        scene,
+        camera,
+        geometry,
+        material,
+        group
+      )
+      this.syncFrustumBounds()
+    }
 
     /** Per-geometry mapping/state records indexed by geometry id. */
     _geometryInfo: TInfo[] = []
@@ -870,6 +995,43 @@ export function createAcTrBatchedMixin<
             this as unknown as AcTrBatchBaseObject & AcTrBatchBounds
           ).getBoundingSphereAt(geometryId, target)
       )
+    }
+
+    /**
+     * Marks aggregate bounds stale after packed vertex data changed and
+     * conservatively disables frustum culling until the next render sync.
+     *
+     * Invariant: `frustumCulled === true` implies a current aggregate sphere
+     * is assigned to both `boundingSphere` and `geometry.boundingSphere`, so
+     * three.js can never cull against stale bounds.
+     */
+    invalidateFrustumBounds() {
+      this.boundingSphere = null
+      if (this.geometry) {
+        this.geometry.boundingSphere = null
+      }
+      this.frustumCulled = false
+      this._frustumBoundsDirty = true
+    }
+
+    /**
+     * Syncs the aggregate bounding sphere into `geometry.boundingSphere` and
+     * enables frustum culling. Called from the `onBeforeRender` hook, i.e. at
+     * most once per frame and only after dirty geometry has already rendered
+     * one unculled frame (never a skipped one).
+     */
+    syncFrustumBounds() {
+      if (!_batchFrustumCullingEnabled) {
+        this.frustumCulled = false
+        return
+      }
+      if (!this._frustumBoundsDirty) return
+      this.computeBoundingSphere()
+      if (this.boundingSphere) {
+        this.geometry.boundingSphere = this.boundingSphere
+      }
+      this.frustumCulled = true
+      this._frustumBoundsDirty = false
     }
 
     /**

@@ -1,0 +1,20 @@
+{
+  "date": "2026-08-20",
+  "milestone": "M3-M5-post",
+  "note": "M3/M4/M5 落地后复测。bench-parse 只测解析路径(无 worldDraw),M5-1/M5-2 不影响;与 M2-post 基线的差异为本机噪声(utf8 两次复测 727→704、gbk 2447→2244 均跨越基线值)。",
+  "fixtures": {
+    "utf8-mixed-100000": { "entities": 100000, "bestMs": 703.78, "avgMs": 763.83, "peakHeapMB": 239.6, "m2PostBestMs": 663.99 },
+    "gbk-lines-300000": { "entities": 303000, "bestMs": 2243.62, "avgMs": 2287.91, "peakHeapMB": 719.4, "m2PostBestMs": 2313.24 },
+    "ascii-lines-300000": { "entities": 300000, "bestMs": 1997.84, "avgMs": 2059.53, "peakHeapMB": 709.6, "m2PostBestMs": 2092.07 }
+  },
+  "splineBandedSolver": {
+    "note": "n=800 控制点三次插值求解(含矩阵构建)约 200ms(本机);旧稠密实现 O(n³) 不可比。差分验证与旧稠密解 1e-8 一致。"
+  },
+  "gpuDependentVerification": [
+    "M3-1/M3-2 上传量对比(renderer.info)",
+    "M3-4 shader 编译次数",
+    "M4-1 一万条重复 MTEXT 打开耗时与 worker 任务数",
+    "M4-2 框选 10 万对象计时",
+    "M5-3/M5-4 收益测量(暂缓决策依据)"
+  ]
+}

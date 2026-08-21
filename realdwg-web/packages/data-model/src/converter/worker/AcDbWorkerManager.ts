@@ -23,6 +23,12 @@ export interface AcDbWorkerResult<TOutput = unknown> {
   duration: number
 }
 
+/**
+ * Callback invoked with intermediate worker task progress (ratio in `[0, 1]`)
+ * before the final {@link AcDbWorkerResult} settles.
+ */
+export type AcDbWorkerProgressCallback = (progress: number) => void
+
 export interface AcDbWorkerInstance {
   worker: Worker
   isBusy: boolean
@@ -43,6 +49,7 @@ export class AcDbWorkerManager {
       resolve: (value: AcDbWorkerResult) => void
       reject: (error: Error) => void
       timeout: NodeJS.Timeout
+      onProgress?: AcDbWorkerProgressCallback
     }
   >()
 
@@ -59,7 +66,8 @@ export class AcDbWorkerManager {
    */
   async execute<TInput, TOutput>(
     input: TInput,
-    workerUrl?: string
+    workerUrl?: string,
+    onProgress?: AcDbWorkerProgressCallback
   ): Promise<AcDbWorkerResult<TOutput>> {
     const startTime = Date.now()
     const taskId = this.generateTaskId()
@@ -68,7 +76,8 @@ export class AcDbWorkerManager {
       return await this.executeInWorker(
         taskId,
         input,
-        workerUrl || this.config.workerUrl
+        workerUrl || this.config.workerUrl,
+        onProgress
       )
     } catch (error) {
       const duration = Date.now() - startTime
@@ -90,7 +99,8 @@ export class AcDbWorkerManager {
   private async executeInWorker<TInput, TOutput>(
     taskId: string,
     input: TInput,
-    workerUrl: string | URL
+    workerUrl: string | URL,
+    onProgress?: AcDbWorkerProgressCallback
   ): Promise<AcDbWorkerResult<TOutput>> {
     const startTime = Date.now()
 
@@ -119,13 +129,21 @@ export class AcDbWorkerManager {
           this.releaseWorker(worker)
           reject(error)
         },
-        timeout
+        timeout,
+        onProgress
       })
 
       // Set up message handler
       const messageHandler = (event: MessageEvent) => {
-        const { id, success, data, error, errorCode } = event.data
+        const { id, type, success, data, error, errorCode } = event.data
         if (id !== taskId) return
+
+        // Intermediate progress notification — task stays pending.
+        if (type === 'progress') {
+          const task = this.pendingTasks.get(taskId)
+          task?.onProgress?.(event.data.progress)
+          return
+        }
 
         this.cleanupTask(taskId)
 
@@ -290,9 +308,10 @@ export class AcDbWorkerApi {
    */
   async execute<TInput, TOutput>(
     input: TInput,
-    workerUrl?: string
+    workerUrl?: string,
+    onProgress?: AcDbWorkerProgressCallback
   ): Promise<AcDbWorkerResult<TOutput>> {
-    return this.framework.execute(input, workerUrl)
+    return this.framework.execute(input, workerUrl, onProgress)
   }
 
   /**

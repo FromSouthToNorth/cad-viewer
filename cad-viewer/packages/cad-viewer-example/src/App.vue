@@ -2,6 +2,16 @@
   <div id="app-root">
     <!-- Upload screen when no drawing is open -->
     <div v-if="!showViewer" class="upload-screen">
+      <button
+        type="button"
+        class="theme-toggle"
+        :aria-label="
+          theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'
+        "
+        @click="toggleTheme"
+      >
+        {{ theme === 'dark' ? '🌙 Dark' : '☀️ Light' }}
+      </button>
       <FileUpload
         @file-select="handleFileSelect"
         @new-drawing="handleNewDrawing"
@@ -17,6 +27,7 @@
         :draw-no-plot-layers="drawNoPlotLayers"
         :progressive-rendering="progressiveRendering"
         :open-view-mode="openViewMode"
+        :theme="theme"
         @create="onViewerCreate"
         :base-url="BASE_URL"
       />
@@ -34,12 +45,46 @@ import {
 } from '@mlightcad/cad-simple-viewer'
 import { MlCadViewer } from '@mlightcad/cad-viewer'
 import { log } from '@mlightcad/data-model'
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 
 import { AcApQuitCmd } from './commands'
 import FileUpload from './components/FileUpload.vue'
 import { initializeLocale } from './locale'
 import { store } from './store'
+
+type UiTheme = 'light' | 'dark'
+
+const THEME_STORAGE_KEY = 'cad-viewer-example:ui-theme'
+
+const readStoredTheme = (): UiTheme => {
+  try {
+    const stored = window.localStorage.getItem(THEME_STORAGE_KEY)
+    if (stored === 'light' || stored === 'dark') return stored
+  } catch {
+    // localStorage unavailable (privacy mode) — fall through to the default
+  }
+  return 'dark'
+}
+
+const theme = ref<UiTheme>(readStoredTheme())
+
+// Applies the example-shell theme. The viewer itself receives the same value
+// through the `theme` prop, which writes the COLORTHEME sysvar.
+const applyThemeToPage = (value: UiTheme) => {
+  document.documentElement.classList.toggle('dark', value === 'dark')
+  document.documentElement.setAttribute('data-ml-ui-theme', value)
+  try {
+    window.localStorage.setItem(THEME_STORAGE_KEY, value)
+  } catch {
+    // best effort only
+  }
+}
+
+watch(theme, applyThemeToPage, { immediate: true })
+
+const toggleTheme = () => {
+  theme.value = theme.value === 'dark' ? 'light' : 'dark'
+}
 
 const initialize = () => {
   initializeLocale()
@@ -177,5 +222,29 @@ const handleNewDrawing = (
   left: 0;
   z-index: 1000;
   pointer-events: auto; /* Allow clicks on upload screen */
+}
+
+:root[data-ml-ui-theme='dark'] .upload-screen {
+  background: linear-gradient(135deg, #1e2235 0%, #17142b 100%);
+}
+
+.theme-toggle {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 1;
+  padding: 6px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+}
+
+.theme-toggle:hover {
+  background: rgba(255, 255, 255, 0.22);
 }
 </style>

@@ -50,11 +50,19 @@ function localOverrideFor(packageName, realdwgDir) {
     throw new Error(`Local package ${packageName} not found at ${pkgDir}`)
   }
   const rel = relative(rootDir, pkgDir).replaceAll('\\', '/')
-  return `'file:${rel}'`
+  // link: keeps cad-viewer pointing at the live source dir, so rebuilds in
+  // realdwg-web are picked up without re-running pnpm install in cad-viewer.
+  return `'link:${rel}'`
 }
 
 function switchToLocal(content, realdwgDir) {
   let next = content
+  // Remove any pre-existing local overrides first so re-running the tool is
+  // idempotent (the workspace file may already be committed in local mode).
+  next = next.replace(
+    /^  '@mlightcad\/(?:common|geometry-engine|graphic-interface)': '(?:link|file):[^']*'[^\n]*\n?/gm,
+    ''
+  )
   // Replace the data-model override line with the full local package set.
   // The regex keeps the original 2-space indentation, so the first entry
   // carries no indent and the following ones use the same 2-space prefix.
@@ -67,6 +75,11 @@ function switchToLocal(content, realdwgDir) {
     localLines
   )
   if (next === content) {
+    // Unchanged because the file is already in local mode (the idempotent
+    // cleanup above is a no-op), or because the override key is missing.
+    if (/['"]?@mlightcad\/data-model['"]?\s*:/.test(next)) {
+      return next
+    }
     throw new Error(
       'No @mlightcad/data-model override found in pnpm-workspace.yaml'
     )
@@ -75,7 +88,7 @@ function switchToLocal(content, realdwgDir) {
 }
 
 function switchToNpm(content) {
-  const localLine = /^  '(@mlightcad\/(?:common|geometry-engine|graphic-interface))': '(?:link|file):[^']*'$/gm
+  const localLine = /^  '(@mlightcad\/(?:common|geometry-engine|graphic-interface))': '(?:link|file):[^']*'[^\n]*\n?/gm
   const withoutSiblings = content.replace(localLine, '')
   const next = withoutSiblings.replace(
     /(['"]?@mlightcad\/data-model['"]?\s*:\s*)(['"]).*?\2/,

@@ -3,6 +3,8 @@ import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
+  DATA_MODEL_PACKAGE,
+  DXF_PARSER_WORKER_FILE,
   LIBREDWG_CONVERTER_PACKAGE,
   LIBREDWG_PARSER_WASM_FILE,
   LIBREDWG_PARSER_WORKER_FILE,
@@ -65,6 +67,10 @@ copyIfExists(
 copy(
   join(pkgRoot(MTEXT_RENDERER_PACKAGE), 'dist', MTEXT_RENDERER_WORKER_FILE),
   join(workersDir, MTEXT_RENDERER_WORKER_FILE)
+)
+copy(
+  join(pkgRoot(DATA_MODEL_PACKAGE), 'dist', DXF_PARSER_WORKER_FILE),
+  join(workersDir, DXF_PARSER_WORKER_FILE)
 )
 copy(
   join(pkgRoot('@mlightcad/cad-html-plugin'), 'dist', 'viewer-runtime.iife.js'),

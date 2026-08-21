@@ -16,12 +16,40 @@ import {
 
 import { AcDbDxfFiler } from '../base/AcDbDxfFiler'
 import { AcDbObject } from '../base/AcDbObject'
+import { AcDbLinetypeTableRecord } from '../database/AcDbLinetypeTableRecord'
 import { ByBlock, ByLayer, DEFAULT_LINE_TYPE } from '../misc/AcDbConstants'
 import { AcDbOsnapMode } from '../misc/AcDbOsnapMode'
 import {
   AcDbEntityProperties,
   AcDbEntityPropertyGroup
 } from './AcDbEntityProperties'
+
+/**
+ * Composed line-style cache entry for one linetype table record.
+ *
+ * `styles` maps the resolved style type (`ByLayer` / `ByBlock` /
+ * `UserSpecified`) to its composed {@link AcGiLineStyle}. `version` mirrors
+ * {@link AcDbLinetypeTableRecord.linetypeVersion} so record redefinition
+ * rebuilds the composed styles.
+ */
+interface CachedComposedLineStyles {
+  version: number
+  styles: Map<AcGiStyleType, AcGiLineStyle>
+}
+
+/**
+ * Per-record composed line-style cache backing {@link AcDbEntity.lineStyle}.
+ *
+ * `lineStyle` is consulted once per entity draw; composing a fresh object each
+ * call (spread of the record snapshot) allocates millions of short-lived
+ * objects on large drawings. The cached objects are treated as read-only by
+ * all consumers — the renderer only reads traits — while `pattern` keeps the
+ * record's live array reference so in-place pattern edits still propagate.
+ */
+const _composedLineStyleCache = new WeakMap<
+  AcDbLinetypeTableRecord,
+  CachedComposedLineStyles
+>()
 
 /**
  * Abstract base class for all drawing entities.
@@ -165,6 +193,18 @@ export abstract class AcDbEntity extends AcDbObject {
   }
 
   /**
+   * Shared foreground (ACI 7) color returned for ByBlock entities without an
+   * INSERT owner.
+   *
+   * {@link resolveStandardColor} is called once per entity draw and would
+   * otherwise allocate a fresh foreground color every call. Consumers treat
+   * resolved colors as read-only (the ByLayer path already returns the shared
+   * layer-table color object), so a module singleton is safe.
+   */
+  private static readonly _byBlockForegroundColor =
+    /*@__PURE__*/ new AcCmColor().setForeground()
+
+  /**
    * Default ByLayer / ByBlock colour resolution for entities without an INSERT owner.
    */
   protected resolveStandardColor() {
@@ -180,7 +220,7 @@ export abstract class AcDbEntity extends AcDbObject {
       // created entities. Nested block ByBlock colours are applied during
       // block rendering; attributes override this method to resolve against
       // their owning INSERT.
-      color = new AcCmColor().setForeground()
+      color = AcDbEntity._byBlockForegroundColor
     }
     return color
   }
@@ -902,15 +942,24 @@ export abstract class AcDbEntity extends AcDbObject {
     const { type, name } = this.getLineType()
     const lineTypeRecord = this.database?.tables.linetypeTable.getAt(name)
     if (lineTypeRecord) {
-      return { type, ...lineTypeRecord.linetype }
-    } else {
-      return {
-        type,
-        name,
-        standardFlag: 0,
-        description: '',
-        totalPatternLength: 0
+      let entry = _composedLineStyleCache.get(lineTypeRecord)
+      if (!entry || entry.version !== lineTypeRecord.linetypeVersion) {
+        entry = { version: lineTypeRecord.linetypeVersion, styles: new Map() }
+        _composedLineStyleCache.set(lineTypeRecord, entry)
       }
+      let style = entry.styles.get(type)
+      if (!style) {
+        style = { type, ...lineTypeRecord.linetype }
+        entry.styles.set(type, style)
+      }
+      return style
+    }
+    return {
+      type,
+      name,
+      standardFlag: 0,
+      description: '',
+      totalPatternLength: 0
     }
   }
 

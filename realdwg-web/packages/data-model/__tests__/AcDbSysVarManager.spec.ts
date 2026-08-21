@@ -69,7 +69,7 @@ describe('AcDbSysVarManager', () => {
       'Invalid GRIPS value! Valid range is 0 to 2.'
     )
 
-    expect(manager.getVar(AcDbSystemVariables.GRIPSIZE, db)).toBe(5)
+    expect(manager.getVar(AcDbSystemVariables.GRIPSIZE, db)).toBe(14)
     manager.setVar(AcDbSystemVariables.GRIPSIZE, '10', db)
     expect(manager.getVar(AcDbSystemVariables.GRIPSIZE, db)).toBe(10)
     manager.setVar(AcDbSystemVariables.GRIPSIZE, 255, db)
@@ -242,7 +242,7 @@ describe('AcDbSysVarManager', () => {
     expect(manager.getDefaultValue(AcDbSystemVariables.GRIPHOT)).toBe(12)
     expect(manager.getDefaultValue(AcDbSystemVariables.GRIPOBJLIMIT)).toBe(100)
     expect(manager.getDefaultValue(AcDbSystemVariables.GRIPS)).toBe(2)
-    expect(manager.getDefaultValue(AcDbSystemVariables.GRIPSIZE)).toBe(5)
+    expect(manager.getDefaultValue(AcDbSystemVariables.GRIPSIZE)).toBe(14)
     expect(manager.getAllDescriptors().length).toBeGreaterThan(0)
     expect(() => manager.getDefaultValue('__NOT_FOUND__')).toThrow(
       'System variable __not_found__ not found!'

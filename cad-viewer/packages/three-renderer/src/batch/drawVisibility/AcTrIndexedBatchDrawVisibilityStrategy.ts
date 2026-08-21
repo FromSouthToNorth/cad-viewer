@@ -31,6 +31,7 @@ export class AcTrIndexedBatchDrawVisibilityStrategy extends AcTrBatchDrawVisibil
     for (let i = indexStart; i < indexStart + indexCount; i++) {
       array[i] = vertexStart
     }
+    indexAttr.addUpdateRange(indexStart, indexCount)
     indexAttr.needsUpdate = true
     return true
   }
@@ -48,6 +49,7 @@ export class AcTrIndexedBatchDrawVisibilityStrategy extends AcTrBatchDrawVisibil
     }
 
     indexAttr.array.set(snapshot, info.indexStart)
+    indexAttr.addUpdateRange(info.indexStart, snapshot.length)
     indexAttr.needsUpdate = true
     delete info.hiddenDrawSnapshot
     return true

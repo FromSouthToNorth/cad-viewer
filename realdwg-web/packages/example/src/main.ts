@@ -74,6 +74,42 @@ for (const button of tabButtons) {
   })
 }
 
+const themeToggle = document.getElementById('themeToggle') as HTMLButtonElement
+const THEME_STORAGE_KEY = 'realdwg-web-example:ui-theme'
+
+type ExampleUiTheme = 'light' | 'dark'
+
+/**
+ * Applies the page chrome theme. SVG pattern/linetype previews intentionally
+ * keep a fixed light "paper" background in both themes.
+ */
+const applyUiTheme = (theme: ExampleUiTheme, persist: boolean) => {
+  document.documentElement.setAttribute('data-theme', theme)
+  themeToggle.textContent = theme === 'dark' ? 'Theme: Dark' : 'Theme: Light'
+  if (!persist) return
+  try {
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme)
+  } catch {
+    // best effort only
+  }
+}
+
+// The inline script in index.html already restored the persisted attribute.
+applyUiTheme(
+  document.documentElement.getAttribute('data-theme') === 'dark'
+    ? 'dark'
+    : 'light',
+  false
+)
+
+themeToggle.addEventListener('click', () => {
+  const next: ExampleUiTheme =
+    document.documentElement.getAttribute('data-theme') === 'dark'
+      ? 'light'
+      : 'dark'
+  applyUiTheme(next, true)
+})
+
 exportButton.type = 'button'
 exportButton.textContent = 'Export DXF'
 exportButton.hidden = true
@@ -98,7 +134,9 @@ const patParser = new AcDbPatParser()
 /**
  * Registers DWG and DXF converters with the global manager.
  *
- * DWG uses LibreDWG in a web worker; DXF uses the native streaming converter.
+ * DWG uses LibreDWG in a web worker; DXF uses the native converter, which
+ * tokenizes in a web worker and falls back to main-thread parsing when the
+ * worker bundle is unreachable.
  * Registration failures are logged but do not throw.
  *
  * @param fileType - Format being parsed; DXF registration is skipped for DWG.
@@ -122,7 +160,8 @@ const registerConverters = (fileType: AcDbFileType) => {
       AcDbFileType.DXF,
       new AcDbNativeDxfConverter({
         convertByEntityType: false,
-        useWorker: false
+        useWorker: true,
+        parserWorkerUrl: './assets/dxf-parser-worker.js'
       })
     )
   } catch (error) {
@@ -137,7 +176,7 @@ const describeConverterMode = (fileType: AcDbFileType): string => {
   if (fileType === AcDbFileType.DWG) {
     return 'LibreDWG (web worker)'
   }
-  return 'native AcDbNativeDxfConverter (main thread)'
+  return 'native AcDbNativeDxfConverter (worker tokenize, main-thread fallback)'
 }
 
 /**
@@ -308,7 +347,7 @@ const renderThumbnailPreview = (database: AcDbDatabase | null) => {
   image.style.display = 'block'
   image.style.maxWidth = 'min(100%, 512px)'
   image.style.height = 'auto'
-  image.style.border = '1px solid #dadada'
+  image.style.border = '1px solid var(--tab-border, #dadada)'
   image.style.borderRadius = '6px'
   image.style.background = '#f8f9fa'
 
@@ -316,7 +355,7 @@ const renderThumbnailPreview = (database: AcDbDatabase | null) => {
   caption.textContent = `${database.thumbnailImage.length.toLocaleString()} bytes`
   caption.style.marginTop = '6px'
   caption.style.fontSize = '12px'
-  caption.style.color = '#5f6368'
+  caption.style.color = 'var(--tab-muted, #5f6368)'
 
   thumbnailPreviewPanel.appendChild(title)
   thumbnailPreviewPanel.appendChild(image)
@@ -362,7 +401,7 @@ const renderLinetypePreviews = (database: AcDbDatabase | null) => {
     row.style.alignItems = 'center'
     row.style.gap = '12px'
     row.style.padding = '6px 8px'
-    row.style.border = '1px solid #dadada'
+    row.style.border = '1px solid var(--tab-border, #dadada)'
     row.style.borderRadius = '6px'
 
     const label = document.createElement('div')
@@ -382,7 +421,7 @@ const renderLinetypePreviews = (database: AcDbDatabase | null) => {
       height: 10,
       padding: 8,
       strokeWidth: 2,
-      stroke: '#202124',
+      stroke: 'currentColor',
       repeats: 4
     })
 
@@ -458,15 +497,15 @@ const renderPatTable = (patDocument: AcDbPatDocument) => {
   jsonHeader.textContent = 'Pattern JSON'
   jsonHeader.style.textAlign = 'left'
   jsonHeader.style.padding = '8px'
-  jsonHeader.style.border = '1px solid #dadada'
-  jsonHeader.style.background = '#f3f4f6'
+  jsonHeader.style.border = '1px solid var(--tab-border, #dadada)'
+  jsonHeader.style.background = 'var(--header-bg, #f3f4f6)'
 
   const svgHeader = document.createElement('th')
   svgHeader.textContent = 'PAT Preview'
   svgHeader.style.textAlign = 'left'
   svgHeader.style.padding = '8px'
-  svgHeader.style.border = '1px solid #dadada'
-  svgHeader.style.background = '#f3f4f6'
+  svgHeader.style.border = '1px solid var(--tab-border, #dadada)'
+  svgHeader.style.background = 'var(--header-bg, #f3f4f6)'
 
   headerRow.appendChild(jsonHeader)
   headerRow.appendChild(svgHeader)
@@ -479,7 +518,7 @@ const renderPatTable = (patDocument: AcDbPatDocument) => {
 
     const jsonCell = document.createElement('td')
     jsonCell.style.verticalAlign = 'top'
-    jsonCell.style.border = '1px solid #dadada'
+    jsonCell.style.border = '1px solid var(--tab-border, #dadada)'
     jsonCell.style.padding = '8px'
 
     const jsonTitle = document.createElement('div')
@@ -502,7 +541,7 @@ const renderPatTable = (patDocument: AcDbPatDocument) => {
 
     const previewCell = document.createElement('td')
     previewCell.style.verticalAlign = 'top'
-    previewCell.style.border = '1px solid #dadada'
+    previewCell.style.border = '1px solid var(--tab-border, #dadada)'
     previewCell.style.padding = '8px'
     previewCell.style.width = '380px'
     previewCell.innerHTML = patSvgRenderer.renderPattern(pattern, {

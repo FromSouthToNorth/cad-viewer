@@ -58,7 +58,7 @@ describe('AcTrVertexMarkerOverlay', () => {
     expect(points.name).toBe('SelectionVertexMarkerOverlay')
     expect(points.frustumCulled).toBe(false)
     expect(points.renderOrder).toBe(AcTrVertexMarkerOverlay.RENDER_ORDER)
-    expect(material.size).toBe(7)
+    expect(material.size).toBe(14)
     expect(material.sizeAttenuation).toBe(false)
     expect(material.depthTest).toBe(false)
     expect(material.depthWrite).toBe(false)

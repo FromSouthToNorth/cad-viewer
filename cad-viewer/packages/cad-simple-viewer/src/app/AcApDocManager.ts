@@ -132,10 +132,12 @@ import {
   AcApOpenDatabaseOptions,
   AcApOpenViewMode
 } from './AcDbOpenDatabaseOptions'
+import {
+  acapNewDrawingTemplateContent,
+  DEFAULT_NEW_DRAWING_TEMPLATE_NAME
+} from './defaultNewDrawingTemplate'
 
 const DEFAULT_BASE_URL = 'https://cdn.jsdelivr.net/gh/mlightcad/cad-data'
-/** Default ISO drawing template loaded by {@link AcApDocManager.newDocument}. */
-const DEFAULT_NEW_DRAWING_TEMPLATE = 'templates/acadiso.dxf'
 /**
  * Built-in command alias table used when users do not provide explicit alias overrides.
  *
@@ -213,6 +215,15 @@ export interface AcApWebworkerFiles {
    * checks can verify the worker script is reachable.
    */
   dwgParser?: string | URL
+
+  /**
+   * Optional URL of the Web Worker that tokenizes DXF files.
+   *
+   * The native DXF converter falls back to main-thread parsing when the
+   * worker is unreachable, so this entry is only needed when the host wants
+   * readiness checks to verify the deployed `dxf-parser-worker.js` bundle.
+   */
+  dxfParser?: string | URL
 
   /**
    * URL of the Web Worker bundle responsible for rendering MTEXT entities.
@@ -516,8 +527,7 @@ export class AcApDocManager {
     const busyHost = options.busyIndicatorHost ?? view.container
     this._openFileProgress = new AcApOpenFileProgressController(busyHost)
     this._openFileProgress.setSceneBusyGate(
-      () => (this.curView as AcTrView2d).isOpenFileWorkPending,
-      () => (this.curView as AcTrView2d).entityProcessingProgress
+      () => (this.curView as AcTrView2d).isOpenFileWorkPending
     )
     this._busyIndicator = new AcApBusyIndicator(busyHost)
     acapBindCommandServices({
@@ -1052,10 +1062,12 @@ export class AcApDocManager {
   }
 
   /**
-   * Creates a new CAD document from the default ISO drawing template.
+   * Creates a new CAD document from the embedded default template.
    *
-   * This method loads the predefined template (`acadiso.dxf`) from {@link baseUrl}
-   * and replaces the current document in write mode with default open options.
+   * The template is parsed locally instead of downloading `acadiso.dxf` from
+   * {@link baseUrl}, so creating a new drawing never hits the network and —
+   * unlike file opens — deliberately shows no open-file progress UI: the app
+   * lands directly on a ready-to-draw empty document.
    *
    * @param options - Optional database opening options merged with write mode
    * @returns Promise that resolves to true if the document was successfully created
@@ -1066,22 +1078,27 @@ export class AcApDocManager {
    * ```
    */
   async newDocument(options?: AcApOpenDatabaseOptions) {
-    const baseUrl = this.baseUrl.endsWith('/')
-      ? this.baseUrl
-      : `${this.baseUrl}/`
-    const templateUrl = `${baseUrl}${DEFAULT_NEW_DRAWING_TEMPLATE}`
     const openOptions = this.setOptions({
       ...options,
       mode: AcEdOpenMode.Write
     })
     this.onBeforeOpenDocument(openOptions)
-    await this._openFileProgress.beginOpen(this.context.doc.database)
-    const isSuccess = await this.context.doc.openUri(templateUrl, openOptions)
-    if (isSuccess) {
-      this.context.doc.resetNewDocumentIdentity()
+    this._openFileProgress.setUiSuppressed(true)
+    try {
+      await this._openFileProgress.beginOpen(this.context.doc.database)
+      const isSuccess = await this.context.doc.openDocument(
+        DEFAULT_NEW_DRAWING_TEMPLATE_NAME,
+        acapNewDrawingTemplateContent(),
+        openOptions
+      )
+      if (isSuccess) {
+        this.context.doc.resetNewDocumentIdentity()
+      }
+      this.onAfterOpenDocument(isSuccess, openOptions)
+      return isSuccess
+    } finally {
+      this._openFileProgress.setUiSuppressed(false)
     }
-    this.onAfterOpenDocument(isSuccess, openOptions)
-    return isSuccess
   }
 
   /**

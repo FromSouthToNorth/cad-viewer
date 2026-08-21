@@ -521,7 +521,8 @@ export abstract class AcTrMaterialManager<T> {
       isForeground,
       isBackgroundFill,
       drawOrder: traits.drawOrder ?? 0,
-      materialKey: key
+      materialKey: key,
+      isShared: true
     })
 
     this.cache[key] = material
