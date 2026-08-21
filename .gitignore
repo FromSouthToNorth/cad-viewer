@@ -3,3 +3,6 @@
 
 # Local drawing files (DXF/DWG working data)
 cad/
+# Transient process logs (regenerated every run)
+cad-tools/logs/
+__pycache__/
