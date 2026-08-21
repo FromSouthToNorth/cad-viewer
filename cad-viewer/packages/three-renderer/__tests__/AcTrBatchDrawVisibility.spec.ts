@@ -37,13 +37,40 @@ describe('applyBatchSlotDrawVisibility', () => {
 
     const info = createIndexedSlotInfo()
     const originalIndices = Array.from(geometry.getIndex()!.array)
+    const indexAttr = geometry.getIndex()!
 
     applyBatchSlotDrawVisibility(geometry, info, false, 'indexed')
-    expect(Array.from(geometry.getIndex()!.array)).toEqual([0, 0, 0])
+    expect(Array.from(indexAttr.array)).toEqual([0, 0, 0])
+    expect(indexAttr.updateRanges).toEqual([{ start: 0, count: 3 }])
+    indexAttr.clearUpdateRanges()
 
     applyBatchSlotDrawVisibility(geometry, info, true, 'indexed')
-    expect(Array.from(geometry.getIndex()!.array)).toEqual(originalIndices)
+    expect(Array.from(indexAttr.array)).toEqual(originalIndices)
+    expect(indexAttr.updateRanges).toEqual([{ start: 0, count: 3 }])
     expect(info.hiddenDrawSnapshot).toBeUndefined()
+  })
+
+  it('marks only the collapsed index range for partial upload', () => {
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute(
+      'position',
+      new THREE.Float32BufferAttribute(
+        [0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 5, 5],
+        3
+      )
+    )
+    geometry.setIndex([0, 1, 2, 3, 3, 3])
+
+    const info = createIndexedSlotInfo({
+      vertexStart: 3,
+      indexStart: 3,
+      indexCount: 3
+    })
+
+    applyBatchSlotDrawVisibility(geometry, info, false, 'indexed')
+    const indexAttr = geometry.getIndex()!
+    expect(indexAttr.updateRanges).toEqual([{ start: 3, count: 3 }])
+    expect(indexAttr.array[3]).toBe(3)
   })
 
   it('collapses and restores non-indexed vertex geometry', () => {

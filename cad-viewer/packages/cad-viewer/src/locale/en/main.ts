@@ -961,6 +961,23 @@ export default {
       unlocked: 'Unlocked'
     }
   },
+  progress: {
+    start: 'Start parsing file ...',
+    parse: 'Parsing file ...',
+    font: 'Downloading fonts needed by this drawing ...',
+    ltype: 'Parsing line types ...',
+    style: 'Parsing text styles ...',
+    dimstyle: 'Parsing dimension styles ...',
+    layer: 'Parsing layers ...',
+    vport: 'Parsing viewports ...',
+    blockrecord: 'Parsing block record ...',
+    header: 'Parsing header ...',
+    block: 'Parsing blocks ...',
+    entity: 'Parsing entities ...',
+    object: 'Parsing named dictionaries ...',
+    rendering: 'Rendering drawing ...',
+    end: 'Finished!'
+  },
   message: {
     loadingFonts: 'Loading fonts ...',
     loadingDwgConverter: 'Loading DWG converter...',

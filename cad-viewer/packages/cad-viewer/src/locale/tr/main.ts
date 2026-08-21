@@ -966,6 +966,23 @@ export default {
       unlocked: 'Kilidi Açık'
     }
   },
+  progress: {
+    start: 'Dosya ayrıştırma başlatılıyor ...',
+    parse: 'Dosya ayrıştırılıyor ...',
+    font: 'Bu çizim için gerekli yazı tipleri indiriliyor ...',
+    ltype: 'Çizgi tipleri ayrıştırılıyor ...',
+    style: 'Metin stilleri ayrıştırılıyor ...',
+    dimstyle: 'Ölçülendirme stilleri ayrıştırılıyor ...',
+    layer: 'Katmanlar ayrıştırılıyor ...',
+    vport: 'Görüntü portları ayrıştırılıyor ...',
+    blockrecord: 'Blok kaydı ayrıştırılıyor ...',
+    header: 'Başlık ayrıştırılıyor ...',
+    block: 'Bloklar ayrıştırılıyor ...',
+    entity: 'Nesneler ayrıştırılıyor ...',
+    object: 'Adlandırılmış sözlükler ayrıştırılıyor ...',
+    rendering: 'Çizim render ediliyor ...',
+    end: 'Tamamlandı!'
+  },
   message: {
     loadingFonts: 'Yazı tipleri yükleniyor ...',
     loadingDwgConverter: 'DWG dönüştürücü yükleniyor...',

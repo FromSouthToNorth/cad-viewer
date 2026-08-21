@@ -385,6 +385,7 @@ export class AcTrBatchedMesh extends AcTrBatchedMeshBase {
       'AcTrBatchedMesh',
       geometryId
     )
+    this.invalidateFrustumBounds()
 
     return geometryId
   }
@@ -474,6 +475,7 @@ export class AcTrBatchedMesh extends AcTrBatchedMeshBase {
       for (let i = nextIndexStart, l = array.length; i < l; i++) {
         array[i] = 0
       }
+      indexAttr.addUpdateRange(nextIndexStart, array.length - nextIndexStart)
       indexAttr.needsUpdate = true
     }
 
@@ -486,6 +488,7 @@ export class AcTrBatchedMesh extends AcTrBatchedMeshBase {
     this._availableGeometryIds.length = 0
 
     syncBatchDrawVisibilityAfterOptimize(geometry, this._geometryInfo)
+    this.invalidateFrustumBounds()
 
     return this
   }

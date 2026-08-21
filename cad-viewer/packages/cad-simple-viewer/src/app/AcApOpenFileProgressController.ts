@@ -21,18 +21,19 @@ import { isOpenFileProgressComplete } from './openFileProgress'
  *
  * When progressive scene convert is still draining after CONVERSION `END`,
  * the overlay stays up (see-through) until {@link setSceneBusyGate} reports
- * idle so geometry can appear under the spinner.
+ * idle so geometry can appear under the spinner. The numeric display stays
+ * hidden during the drain (only the spinner and stage text show) so the bar
+ * never restarts from a low value after having reached 100%.
  */
 export class AcApOpenFileProgressController {
   private readonly _progress: AcApProgress
   private _peak = 0
-  private _stage?: AcDbProgressdEventArgs['stage']
   private _overlayVisible = false
   private _lastMessage = ''
   private _lastProgress = -1
   private _seeThrough = false
+  private _uiSuppressed = false
   private _sceneBusyGate?: () => boolean
-  private _sceneBusyProgress?: () => number | undefined
   private _holdPollId?: ReturnType<typeof setTimeout>
 
   private static readonly OVERLAY_DEFAULT = 'rgba(0,0,0,0.45)'
@@ -67,15 +68,9 @@ export class AcApOpenFileProgressController {
    * Used to keep the overlay until progressive scene convert finishes.
    *
    * @param gate - Busy predicate controlling overlay lifetime
-   * @param progress - Optional 0-1 progress source for the scene drain phase;
-   *   when provided, the numeric display keeps updating while the gate is true
    */
-  setSceneBusyGate(
-    gate: (() => boolean) | undefined,
-    progress?: () => number | undefined
-  ): void {
+  setSceneBusyGate(gate: (() => boolean) | undefined): void {
     this._sceneBusyGate = gate
-    this._sceneBusyProgress = progress
   }
 
   /**
@@ -84,7 +79,6 @@ export class AcApOpenFileProgressController {
   reset(): void {
     this.clearHoldPoll()
     this._peak = 0
-    this._stage = undefined
     this._overlayVisible = false
     this._lastMessage = ''
     this._lastProgress = -1
@@ -106,34 +100,67 @@ export class AcApOpenFileProgressController {
   }
 
   /**
+   * While true, progress events are consumed without touching the UI: no
+   * `open-file-progress` event is emitted and the overlay stays hidden.
+   * Used by lightweight internal opens such as {@link AcApDocManager.newDocument},
+   * which must not show a loading bar. Lifting suppression resets the
+   * controller state so the next visible open starts clean.
+   */
+  setUiSuppressed(suppressed: boolean): void {
+    this._uiSuppressed = suppressed
+    if (!suppressed) {
+      this.hideAndReset()
+    }
+  }
+
+  /**
    * Normalizes progress, emits `open-file-progress`, and updates the overlay.
    *
    * @returns Normalized progress payload (monotonic percentage)
    */
   handle(data: AcDbProgressdEventArgs): AcDbProgressdEventArgs {
     const progress = this.normalize(data)
-    eventBus.emit('open-file-progress', progress)
-    this.updateOverlay(progress)
+    if (!this._uiSuppressed) {
+      eventBus.emit('open-file-progress', progress)
+      this.updateOverlay(progress)
+    } else if (isOpenFileProgressComplete(data)) {
+      // Keep state clean so the next visible open starts from scratch.
+      this.hideAndReset()
+    }
     return progress
   }
 
   /**
    * Returns monotonic open-file progress for UI display.
    *
-   * Entity conversion reports 0–100% within the ENTITY sub-stage while the
-   * pipeline accumulator is still ~33%; sub-stage END callbacks can therefore
-   * briefly report a lower percentage after IN-PROGRESS already reached 100%.
+   * Progress is re-weighted into a single global domain so the bar climbs
+   * exactly once per open: FETCH_FILE occupies 0-10%, CONVERSION 10-100%.
+   * Domain-start events hold the current peak, so switching stages never dips
+   * the bar. Completion is detected from terminal statuses in
+   * {@link isOpenFileProgressComplete}, never from the weighted value.
    */
   private normalize(data: AcDbProgressdEventArgs): AcDbProgressdEventArgs {
-    const stage = data.stage
-    if (stage !== this._stage) {
-      if (this._stage === 'FETCH_FILE' && stage === 'CONVERSION') {
-        this._peak = 0
-      }
-      this._stage = stage
-    }
-    this._peak = Math.max(this._peak, data.percentage)
+    const weighted = this.weightPercentage(data)
+    this._peak = Math.max(this._peak, weighted)
     return { ...data, percentage: this._peak }
+  }
+
+  /**
+   * Maps raw stage percentage into the global 0-100 domain.
+   */
+  private weightPercentage(data: AcDbProgressdEventArgs): number {
+    if (data.stage === 'FETCH_FILE') {
+      return data.percentage * 0.1
+    }
+    if (data.stage === 'CONVERSION') {
+      // The converter opens with `(0, 'START', 'START')` before any work is
+      // actually performed; hold the current peak so the bar does not dip.
+      if (data.subStage === 'START' && data.subStageStatus === 'START') {
+        return this._peak
+      }
+      return 10 + data.percentage * 0.9
+    }
+    return data.percentage
   }
 
   private resolveMessage(data: AcDbProgressdEventArgs): string | undefined {
@@ -200,7 +227,8 @@ export class AcApOpenFileProgressController {
       this._lastMessage = message
     }
     // The numeric conversion percentage has reached its end; hide the number
-    // while the scene still drains so it does not read a misleading 100%.
+    // while the scene still drains so it does not read a misleading 100% or
+    // restart from a low value.
     this._progress.setProgress(undefined)
     this._lastProgress = -1
 
@@ -210,17 +238,6 @@ export class AcApOpenFileProgressController {
 
     const poll = () => {
       if (this._sceneBusyGate?.()) {
-        const drain = this._sceneBusyProgress?.()
-        if (drain != null && Number.isFinite(drain)) {
-          const percentage = Math.max(
-            0,
-            Math.min(100, Math.round(drain * 100))
-          )
-          if (percentage !== this._lastProgress) {
-            this._lastProgress = percentage
-            this._progress.setProgress(percentage)
-          }
-        }
         this._holdPollId = setTimeout(poll, 50)
         return
       }

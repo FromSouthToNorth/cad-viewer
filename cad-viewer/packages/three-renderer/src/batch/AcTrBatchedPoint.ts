@@ -192,6 +192,7 @@ export class AcTrBatchedPoint extends AcTrBatchedPointBase {
     this.position.set(0, 0, 0)
     this._geometryInitialized = false
     this.geometry.dispose()
+    this.invalidateFrustumBounds()
   }
 
   /**
@@ -359,6 +360,7 @@ export class AcTrBatchedPoint extends AcTrBatchedPointBase {
       'AcTrBatchedPoint',
       geometryId
     )
+    this.invalidateFrustumBounds()
 
     return geometryId
   }
@@ -424,6 +426,7 @@ export class AcTrBatchedPoint extends AcTrBatchedPointBase {
     this._availableGeometryIds.length = 0
 
     syncBatchDrawVisibilityAfterOptimize(geometry, geometryInfoList)
+    this.invalidateFrustumBounds()
 
     return this
   }

@@ -1,0 +1,15 @@
+{
+  "date": "2026-08-20",
+  "milestone": "M2-post",
+  "fixtures": {
+    "utf8-mixed-100000": { "entities": 100000, "bestMs": 663.99, "avgMs": 744.39, "peakHeapMB": 236.0 },
+    "gbk-lines-300000": { "entities": 303000, "bestMs": 2313.24, "avgMs": 2341.52, "peakHeapMB": 723.7 },
+    "ascii-lines-300000": { "entities": 300000, "bestMs": 2092.07, "avgMs": 2184.54, "peakHeapMB": 708.6 }
+  },
+  "readerLevel": {
+    "utf8": "148.0 -> 114.3 ms (-22.8%)",
+    "gbk": "441.7 -> 349.4 ms (-20.9%)",
+    "ascii": "341.4 -> 261.1 ms (-23.5%)"
+  },
+  "pairPoolCeiling": { "utf8": "-6.8%", "gbk": "-5.3%", "verdict": "dropped" }
+}

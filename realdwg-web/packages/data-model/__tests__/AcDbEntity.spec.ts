@@ -12,6 +12,7 @@ import {
 import { acdbHostApplicationServices } from '../src/base/AcDbHostApplicationServices'
 import { AcDbDatabase } from '../src/database/AcDbDatabase'
 import { AcDbLayerTableRecord } from '../src/database/AcDbLayerTableRecord'
+import { AcDbLinetypeTableRecord } from '../src/database/AcDbLinetypeTableRecord'
 import { AcDb2dPolyline, AcDbPoly2dType } from '../src/entity/AcDb2dPolyline'
 import { AcDb2dVertex } from '../src/entity/AcDb2dVertex'
 import { AcDbArc } from '../src/entity/AcDbArc'
@@ -796,5 +797,112 @@ describe('AcDbEntity.transformBy', () => {
     radialDimension.transformBy(new AcGeMatrix3d().makeTranslation(7, 8, 9))
     expectPoint3dClose(radialDimension.center, { x: 7, y: 8, z: 9 })
     expectPoint3dClose(radialDimension.chordPoint, { x: 9, y: 8, z: 9 })
+  })
+})
+
+describe('AcDbEntity.lineStyle caching', () => {
+  let db: AcDbDatabase
+
+  beforeEach(() => {
+    db = new AcDbDatabase()
+    db.createDefaultData()
+    acdbHostApplicationServices().workingDatabase = db
+  })
+
+  const createLine = () =>
+    new AcDbLine(new AcGePoint3d(0, 0, 0), new AcGePoint3d(1, 0, 0))
+
+  it('returns the same composed style object on repeated access', () => {
+    const line = createLine()
+    line.layer = '0'
+    db.tables.blockTable.modelSpace.appendEntity(line)
+
+    expect(line.lineStyle).toBe(line.lineStyle)
+  })
+
+  it('shares one composed style between entities with the same linetype', () => {
+    const a = createLine()
+    const b = createLine()
+    a.lineType = 'Continuous'
+    b.lineType = 'Continuous'
+    db.tables.blockTable.modelSpace.appendEntity(a)
+    db.tables.blockTable.modelSpace.appendEntity(b)
+
+    expect(a.lineStyle).toBe(b.lineStyle)
+  })
+
+  it('distinguishes ByLayer from UserSpecified composed styles', () => {
+    const a = createLine()
+    const b = createLine()
+    a.lineType = 'ByLayer'
+    b.lineType = 'Continuous'
+    db.tables.blockTable.modelSpace.appendEntity(a)
+    db.tables.blockTable.modelSpace.appendEntity(b)
+
+    const styleA = a.lineStyle
+    const styleB = b.lineStyle
+    expect(styleA.type).toBe('ByLayer')
+    expect(styleB.type).toBe('UserSpecified')
+    expect(styleA).not.toBe(styleB)
+  })
+
+  it('rebuilds the composed style when the record is redefined', () => {
+    const line = createLine()
+    line.lineType = 'Continuous'
+    db.tables.blockTable.modelSpace.appendEntity(line)
+
+    const before = line.lineStyle
+    expect(before.totalPatternLength).toBe(0)
+
+    const record = db.tables.linetypeTable.getAt(
+      'Continuous'
+    ) as AcDbLinetypeTableRecord
+    record.setAttr('totalPatternLength', 12)
+
+    const after = line.lineStyle
+    expect(after).not.toBe(before)
+    expect(after.totalPatternLength).toBe(12)
+    expect(line.lineStyle).toBe(after)
+  })
+
+  it('keeps in-place pattern array edits visible on the cached style', () => {
+    const record = new AcDbLinetypeTableRecord({
+      name: 'DASHED',
+      totalPatternLength: 1,
+      pattern: [{ elementLength: 0.5, elementTypeFlag: 0 }]
+    })
+    db.tables.linetypeTable.add(record)
+
+    const line = createLine()
+    line.lineType = 'DASHED'
+    db.tables.blockTable.modelSpace.appendEntity(line)
+
+    const before = line.lineStyle
+    record.setAttr('pattern', [
+      { elementLength: 0.25, elementTypeFlag: 0 },
+      { elementLength: -0.25, elementTypeFlag: 0 }
+    ])
+
+    const after = line.lineStyle
+    expect(after).not.toBe(before)
+    expect(after.pattern).toHaveLength(2)
+  })
+
+  it('reuses one foreground color instance for ByBlock resolution', () => {
+    db.tables.layerTable.add(
+      new AcDbLayerTableRecord({
+        name: 'BYBLOCK_LAYER',
+        color: new AcCmColor().setRGBValue(0x00ff00)
+      })
+    )
+    const a = createLine()
+    const b = createLine()
+    a.layer = 'BYBLOCK_LAYER'
+    b.layer = 'BYBLOCK_LAYER'
+    a.color.setByBlock()
+    b.color.setByBlock()
+
+    expect(a.resolvedColor).toBe(b.resolvedColor)
+    expect(a.resolvedColor.isForeground).toBe(true)
   })
 })

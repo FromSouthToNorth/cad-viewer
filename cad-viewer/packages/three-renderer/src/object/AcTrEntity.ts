@@ -4,6 +4,7 @@ import * as THREE from 'three'
 import type { AcTrBatchDrawPolicy } from '../draw/AcTrBatchDrawPolicy'
 import type { AcTrDrawMode } from '../draw/AcTrDrawMode'
 import { AcTrRenderContext } from '../renderer/AcTrRenderContext'
+import { getMaterialMetadata } from '../style/AcTrMaterialMetadata'
 import {
   AcTrMaterialUtil,
   AcTrMatrixUtil,
@@ -268,6 +269,9 @@ export class AcTrEntity extends AcTrObject implements AcGiEntity {
 
     // Step 3: Dispose of material(s). Template-instance leaves also reuse style
     // cache materials with the template; disposing them would break later hits.
+    // Style-cache materials are shared across entities and batches — the style
+    // manager owns their lifecycle, so disposing them here would force shader
+    // program rebuilds for every other holder.
     if (
       !sharesTemplateGeometry &&
       (object instanceof THREE.Mesh ||
@@ -278,6 +282,9 @@ export class AcTrEntity extends AcTrObject implements AcGiEntity {
         ? object.material
         : [object.material]
       materials.forEach(material => {
+        if (getMaterialMetadata(material).isShared === true) {
+          return
+        }
         material.dispose()
         // Dispose textures (if any) used by the material
         material.map?.dispose()

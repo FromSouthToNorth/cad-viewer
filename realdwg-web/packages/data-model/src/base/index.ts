@@ -18,12 +18,16 @@ export type {
 } from './AcDbDxfGroupCodeTypes'
 export type { AcDbDxfPair } from './AcDbDxfPair'
 export {
+  UTF8_SNIFF_BYTES,
   acdbCreateDxfPairReader,
   acdbIsBinaryDxf,
   acdbMakeAsciiDxfPairReader,
   acdbMakeBinaryDxfPairReader,
   acdbMakeUtf8AsciiDxfPairReader,
-  acdbPeekDxfHeaderInfo
+  acdbMakeWindowedAsciiDxfPairReader,
+  acdbPeekDxfHeaderInfo,
+  acdbSupportsWindowedDecode,
+  acdbValidateUtf8Prefix
 } from './AcDbDxfPairReader'
 export type {
   AcDbCreateDxfPairReaderOptions,

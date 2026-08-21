@@ -14,7 +14,7 @@
 | `data/` | 大图纸测试数据(真实矿图 DXF,含 95MB、38 万实体的 `JKYHMKA01A01yh3m.dxf`) |
 | `docs/` | [性能优化总结](./docs/性能优化总结.md)(根因分析、已实施优化、遗留工作) |
 
-两个子目录是独立检出的 git 仓库,由父仓库以 gitlink(提交哈希)固定版本。
+两个子目录已作为普通目录直接 vendor 进本仓库(不再使用 gitlink),克隆后即可使用。
 
 ## 环境要求
 
@@ -23,26 +23,35 @@
 
 ## 快速开始
 
+新环境只需在仓库根目录执行一次:
+
 ```bash
-# 1. 安装两个仓库的依赖
+node bootstrap.mjs
+```
+
+脚本会按顺序完成:安装 realdwg-web 依赖 → 构建 4 个本地包 → 将 cad-viewer 的
+overrides 切到本地(link: 实时链接)→ 安装 cad-viewer 依赖 → 全量构建验证。
+
+然后启动查看器:
+
+```bash
+cd cad-viewer
+pnpm dev          # 全功能查看器
+pnpm dev:simple   # 简单查看器
+```
+
+手动初始化(等价于 bootstrap.mjs 的各步):
+
+```bash
+# 1. 安装并构建 realdwg-web 的本地包
 cd realdwg-web && pnpm install
-cd ../cad-viewer && pnpm install
+pnpm exec nx run-many -t build -p @mlightcad/common @mlightcad/geometry-engine \
+  @mlightcad/graphic-interface @mlightcad/data-model
 
-# 2. 构建 realdwg-web 的本地包(本地联动依赖已构建产物)
-cd ../realdwg-web
-pnpm --filter @mlightcad/common build
-pnpm --filter @mlightcad/geometry-engine build
-pnpm --filter @mlightcad/graphic-interface build
-pnpm --filter @mlightcad/data-model build
-
-# 3. 将 cad-viewer 的 @mlightcad/* 依赖切换到本地 realdwg-web
+# 2. 将 cad-viewer 的 @mlightcad/* 依赖切换到本地 realdwg-web 并安装
 cd ../cad-viewer
 node tools/use-local-realdwg.mjs
 pnpm install
-
-# 4. 启动查看器
-pnpm dev          # 全功能查看器
-pnpm dev:simple   # 简单查看器
 ```
 
 ## 本地联动(cad-viewer ↔ realdwg-web)
@@ -57,7 +66,13 @@ node tools/use-local-realdwg.mjs --off   # 切回 npm 源
 REALDWG_WEB_DIR=../../realdwg-web node tools/use-local-realdwg.mjs  # 自定义路径
 ```
 
-修改 realdwg-web 代码后需重新构建对应包并重启 dev server。
+本地模式使用 `link:` 覆盖,cad-viewer 直接链接 realdwg-web 源码目录:**修改
+realdwg-web 代码后只需重新构建对应包并重启 dev server,无需重新 `pnpm install`。**
+
+防护机制:cad-viewer 的 `prebuild`/`predev`/`postinstall` 会运行
+`scripts/check-local-deps.mjs`,本地包未构建时直接给出修复提示,而不是晦涩的
+TS2307 报错。
+
 **发布或提交前必须执行 `--off` 还原 overrides 并重新 `pnpm install`。**
 
 ## 性能测试
@@ -92,8 +107,8 @@ cd ../cad-viewer && pnpm --filter @mlightcad/cad-simple-viewer test   # 简单�
 
 ## 注意事项
 
-1. 两个子目录为独立 git 检出(gitlink 固定),克隆父仓库后需按对应哈希手动检出,且各自的改动在其子仓库内提交。
-2. `cad-viewer/pnpm-workspace.yaml` 的本地 overrides 属于开发期配置,**发布前必须还原**(见上文)。
+1. 两个子目录是普通目录(随本仓库一起提交),改动直接在本仓库内提交。
+2. `cad-viewer/pnpm-workspace.yaml` 的本地 overrides 属于开发期配置,**发布或推送到独立 CI 前必须还原**(见上文)。cad-viewer 自带的 `.gitlab-ci.yml` 假设独立检出、依赖 npm 源,在还原 overrides 前不要直接使用。
 3. 本机为软件渲染环境(无真实 GPU),渲染类优化(如大坐标原点平移)需在真实 GPU 环境验证。
 
 ## License

@@ -200,6 +200,7 @@ export class AcTrBatchedLine2 extends AcTrBatchedLine2Base {
     this.position.set(0, 0, 0)
     this._geometryInitialized = false
     this.geometry.dispose()
+    this.invalidateFrustumBounds()
   }
 
   /**
@@ -424,6 +425,7 @@ export class AcTrBatchedLine2 extends AcTrBatchedLine2Base {
       geometryInfo.reservedVertexCount,
       geometryId
     )
+    this.invalidateFrustumBounds()
 
     return geometryId
   }
@@ -472,8 +474,9 @@ export class AcTrBatchedLine2 extends AcTrBatchedLine2Base {
       nextSegmentStart += count
     }
 
-    for (let i = nextSegmentStart * 6, l = packed.length; i < l; i++) {
-      packed[i] = 0
+    const clearStart = nextSegmentStart * 6
+    if (clearStart < packed.length) {
+      packed.fill(0, clearStart)
     }
 
     this._nextSegmentStart = nextSegmentStart
@@ -482,10 +485,19 @@ export class AcTrBatchedLine2 extends AcTrBatchedLine2Base {
 
     const instanceStart = this.geometry.getAttribute('instanceStart')
     const instanceEnd = this.geometry.getAttribute('instanceEnd')
-    instanceStart.needsUpdate = true
-    instanceEnd.needsUpdate = true
+    const sharedData = (instanceStart as THREE.InterleavedBufferAttribute).data
+    if (sharedData) {
+      // instanceStart/instanceEnd share one interleaved buffer; upload only
+      // the zeroed tail instead of the whole segment range.
+      sharedData.addUpdateRange(clearStart, packed.length - clearStart)
+      sharedData.needsUpdate = true
+    } else {
+      instanceStart.needsUpdate = true
+      instanceEnd.needsUpdate = true
+    }
 
     syncBatchDrawVisibilityAfterOptimize(this.geometry, this._geometryInfo)
+    this.invalidateFrustumBounds()
 
     return this
   }

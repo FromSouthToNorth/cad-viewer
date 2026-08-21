@@ -82,8 +82,9 @@ describe('AcApOpenFileProgressController', () => {
       subStageStatus: 'IN-PROGRESS'
     })
 
-    expect(first.percentage).toBe(40)
-    expect(second.percentage).toBe(40)
+    // FETCH_FILE occupies the 0-10% slice of the global bar.
+    expect(first.percentage).toBe(4)
+    expect(second.percentage).toBe(4)
     expect(mockEventBusEmit).toHaveBeenLastCalledWith(
       'open-file-progress',
       second
@@ -91,7 +92,7 @@ describe('AcApOpenFileProgressController', () => {
     expect(progress.show).toHaveBeenCalled()
   })
 
-  it('resets peak percentage when moving from FETCH_FILE to CONVERSION', () => {
+  it('continues monotonic progress across FETCH_FILE → CONVERSION without reset', () => {
     const database = {}
 
     controller.handle({
@@ -108,7 +109,8 @@ describe('AcApOpenFileProgressController', () => {
       subStageStatus: 'START'
     })
 
-    expect(next.percentage).toBe(5)
+    // CONVERSION occupies 10-100%: 10 + 5 × 0.9, and the bar never dips.
+    expect(next.percentage).toBe(14.5)
   })
 
   it('hides the overlay when open-file progress completes', () => {
@@ -141,7 +143,7 @@ describe('AcApOpenFileProgressController', () => {
       subStageStatus: 'IN-PROGRESS'
     })
 
-    expect(next.percentage).toBe(20)
+    expect(next.percentage).toBe(2)
   })
 
   it('beginOpen shows the overlay and yields for paint', async () => {
@@ -189,9 +191,9 @@ describe('AcApOpenFileProgressController', () => {
     expect(progress.setMessage).toHaveBeenCalledTimes(1)
     expect(progress.setMessage).toHaveBeenCalledWith('main.progress.entity')
     expect(progress.setProgress).toHaveBeenCalledTimes(3)
-    expect(progress.setProgress).toHaveBeenNthCalledWith(1, 20)
-    expect(progress.setProgress).toHaveBeenNthCalledWith(2, 40)
-    expect(progress.setProgress).toHaveBeenNthCalledWith(3, 60)
+    expect(progress.setProgress).toHaveBeenNthCalledWith(1, 28)
+    expect(progress.setProgress).toHaveBeenNthCalledWith(2, 46)
+    expect(progress.setProgress).toHaveBeenNthCalledWith(3, 64)
     expect(mockEventBusEmit).toHaveBeenCalledTimes(3)
   })
 
@@ -215,7 +217,7 @@ describe('AcApOpenFileProgressController', () => {
       subStage: 'ENTITY',
       subStageStatus: 'IN-PROGRESS'
     })
-    expect(progress.setProgress).toHaveBeenLastCalledWith(70)
+    expect(progress.setProgress).toHaveBeenLastCalledWith(73)
 
     controller.handle({
       database,
@@ -234,16 +236,13 @@ describe('AcApOpenFileProgressController', () => {
     expect(progress.hide).toHaveBeenCalled()
   })
 
-  it('reports scene drain progress from the busy gate source while holding', async () => {
+  it('keeps the numeric progress hidden while the scene drains after completion', async () => {
     // Gate stays busy for the completion check and one poll, then goes idle.
     let busyChecks = 0
-    controller.setSceneBusyGate(
-      () => {
-        busyChecks++
-        return busyChecks < 3
-      },
-      () => 0.5
-    )
+    controller.setSceneBusyGate(() => {
+      busyChecks++
+      return busyChecks < 3
+    })
     const database = {}
 
     controller.handle({
@@ -256,7 +255,8 @@ describe('AcApOpenFileProgressController', () => {
     expect(progress.setProgress).toHaveBeenLastCalledWith(undefined)
 
     await new Promise((resolve) => setTimeout(resolve, 80))
-    expect(progress.setProgress).toHaveBeenLastCalledWith(50)
+    // The drain must not repaint a low percentage after 100% was reached.
+    expect(progress.setProgress).toHaveBeenLastCalledWith(undefined)
     await new Promise((resolve) => setTimeout(resolve, 80))
     expect(progress.hide).toHaveBeenCalled()
   })
@@ -282,5 +282,90 @@ describe('AcApOpenFileProgressController', () => {
     expect(progress.setMessage).toHaveBeenNthCalledWith(1, 'main.progress.parse')
     expect(progress.setMessage).toHaveBeenNthCalledWith(2, 'main.progress.style')
     expect(progress.show).toHaveBeenCalledTimes(1)
+  })
+
+  it('emits nothing and keeps the overlay hidden while UI is suppressed', () => {
+    const database = {}
+
+    controller.setUiSuppressed(true)
+    const handled = controller.handle({
+      database,
+      percentage: 40,
+      stage: 'FETCH_FILE',
+      subStageStatus: 'IN-PROGRESS'
+    })
+
+    expect(handled.percentage).toBe(4)
+    expect(mockEventBusEmit).not.toHaveBeenCalled()
+    expect(progress.show).not.toHaveBeenCalled()
+    expect(progress.setProgress).not.toHaveBeenCalled()
+  })
+
+  it('keeps the overlay hidden for a suppressed beginOpen', async () => {
+    controller.setUiSuppressed(true)
+
+    await controller.beginOpen({})
+
+    expect(progress.show).not.toHaveBeenCalled()
+    expect(mockEventBusEmit).not.toHaveBeenCalled()
+    expect(mockYieldForPaint).toHaveBeenCalled()
+  })
+
+  it('resets controller state when suppression is lifted', () => {
+    const database = {}
+    controller.handle({
+      database,
+      percentage: 40,
+      stage: 'FETCH_FILE',
+      subStageStatus: 'IN-PROGRESS'
+    })
+    expect(progress.show).toHaveBeenCalledTimes(1)
+
+    controller.setUiSuppressed(true)
+    controller.handle({
+      database,
+      percentage: 60,
+      stage: 'FETCH_FILE',
+      subStageStatus: 'IN-PROGRESS'
+    })
+
+    progress.show.mockClear()
+    progress.hide.mockClear()
+    mockEventBusEmit.mockClear()
+
+    controller.setUiSuppressed(false)
+    expect(progress.hide).toHaveBeenCalled()
+
+    // The next visible open starts fresh and emits again.
+    controller.handle({
+      database,
+      percentage: 10,
+      stage: 'FETCH_FILE',
+      subStageStatus: 'IN-PROGRESS'
+    })
+    expect(progress.show).toHaveBeenCalledTimes(1)
+    expect(mockEventBusEmit).toHaveBeenCalledTimes(1)
+  })
+
+  it('clears state when a suppressed open completes', () => {
+    const database = {}
+    controller.setUiSuppressed(true)
+
+    controller.handle({
+      database,
+      percentage: 40,
+      stage: 'FETCH_FILE',
+      subStageStatus: 'IN-PROGRESS'
+    })
+    controller.handle({
+      database,
+      percentage: 100,
+      stage: 'FETCH_FILE',
+      subStageStatus: 'END'
+    })
+
+    expect(mockEventBusEmit).not.toHaveBeenCalled()
+    expect(progress.show).not.toHaveBeenCalled()
+    expect(progress.hide).toHaveBeenCalled()
   })
 })

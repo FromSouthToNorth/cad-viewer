@@ -54,6 +54,20 @@ export class AcTrBatchHighlightState {
    * batch, regardless of whether that slot is currently highlighted.
    */
   addressableSlotCount = 0
+  /**
+   * Inclusive dirty slot range (`[start, end]`) written since the last upload.
+   *
+   * `uploadMaskTexture` rewrites only this window of the persistent pixel
+   * buffer instead of rebuilding the whole texture-sized array. `Infinity` /
+   * `-1` mark an empty range.
+   */
+  private _dirtyRangeStart = Infinity
+  private _dirtyRangeEnd = -1
+  /**
+   * Persistent CPU-side RGBA pixel buffer backing {@link maskTexture}. Kept
+   * between uploads so unchanged pixels survive incremental rewrites.
+   */
+  private _maskData: Uint8Array | null = null
 
   /**
    * Returns the number of slots the mask texture must cover for correct UV
@@ -129,7 +143,7 @@ export class AcTrBatchHighlightState {
       return false
     }
     mask[slotId] = next
-    this.dirty = true
+    this.markDirtyRange(slotId)
     return true
   }
 
@@ -150,7 +164,7 @@ export class AcTrBatchHighlightState {
       changed = true
     }
     if (changed) {
-      this.dirty = true
+      this.markDirtyRange(slotId)
     }
     return changed
   }
@@ -166,7 +180,7 @@ export class AcTrBatchHighlightState {
     }
     this.selectedMask.fill(0)
     this.hoveredMask.fill(0)
-    this.dirty = true
+    this.markDirtyFullRange()
     return true
   }
 
@@ -185,8 +199,40 @@ export class AcTrBatchHighlightState {
   }
 
   /**
+   * Extends the dirty slot window to include `slotId` and marks the state dirty.
+   *
+   * @param slotId - Changed geometry slot index.
+   */
+  private markDirtyRange(slotId: number) {
+    this.dirty = true
+    if (slotId < this._dirtyRangeStart) {
+      this._dirtyRangeStart = slotId
+    }
+    if (slotId > this._dirtyRangeEnd) {
+      this._dirtyRangeEnd = slotId
+    }
+  }
+
+  /**
+   * Marks the whole mask dirty (used by bulk clears).
+   */
+  private markDirtyFullRange() {
+    this.dirty = true
+    this._dirtyRangeStart = 0
+    this._dirtyRangeEnd = Math.max(
+      this.selectedMask.length,
+      this.hoveredMask.length
+    ) - 1
+  }
+
+  /**
    * Uploads CPU mask arrays into {@link maskTexture}, reallocating when layout
    * dimensions change.
+   *
+   * Only the dirty slot window of the persistent pixel buffer is rewritten;
+   * pixels outside the window keep their previously uploaded values. The GPU
+   * texture itself still re-uploads whole (`DataTexture` has no update-range
+   * API) — the win is skipping the O(slot count) CPU rebuild on every change.
    *
    * @param force - When `true`, rebuilds the texture even if {@link dirty} is false.
    * @returns The mask texture bound by batch highlight shaders.
@@ -198,9 +244,25 @@ export class AcTrBatchHighlightState {
 
     const slotCount = this.getTextureSlotCount()
     const { width, height } = computeMaskTextureLayout(slotCount)
-    const data = new Uint8Array(width * height * 4)
+    const pixelCount = width * height
 
-    for (let slotId = 0; slotId < slotCount; slotId++) {
+    // A fresh buffer starts zeroed, so every layout change (or first upload)
+    // requires a full write to keep unhighlighted slots sampled as zero.
+    const layoutChanged =
+      this._maskData == null || this._maskData.length !== pixelCount * 4
+    if (layoutChanged) {
+      this._maskData = new Uint8Array(pixelCount * 4)
+      this._dirtyRangeStart = 0
+      this._dirtyRangeEnd = Math.max(slotCount - 1, 0)
+    }
+    const data = this._maskData as Uint8Array
+
+    const startSlot = force ? 0 : Math.max(this._dirtyRangeStart, 0)
+    const endSlot = force
+      ? Math.max(slotCount - 1, 0)
+      : Math.min(this._dirtyRangeEnd, Math.max(slotCount - 1, 0))
+
+    for (let slotId = startSlot; slotId <= endSlot; slotId++) {
       const x = slotId % width
       const y = Math.floor(slotId / width)
       const offset = (y * width + x) * 4
@@ -231,6 +293,8 @@ export class AcTrBatchHighlightState {
     }
 
     this.dirty = false
+    this._dirtyRangeStart = Infinity
+    this._dirtyRangeEnd = -1
     return this.maskTexture
   }
 

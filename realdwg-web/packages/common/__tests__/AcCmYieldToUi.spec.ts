@@ -26,6 +26,43 @@ describe('accmYieldToUi', () => {
     await done
   })
 
+  it('falls back to a timer in a hidden tab (rAF is throttled there)', async () => {
+    const raf = jest.fn(() => 1)
+    ;(
+      globalThis as unknown as { requestAnimationFrame: typeof raf }
+    ).requestAnimationFrame = raf
+    ;(
+      globalThis as unknown as { document: unknown }
+    ).document = { hidden: true }
+
+    const done = accmYieldToUi()
+    await done
+    expect(raf).not.toHaveBeenCalled()
+
+    delete (globalThis as unknown as { document?: unknown }).document
+  })
+
+  it('uses rAF when the page is visible', async () => {
+    const callbacks: Array<() => void> = []
+    const raf = jest.fn((cb: () => void) => {
+      callbacks.push(cb)
+      return callbacks.length
+    })
+    ;(
+      globalThis as unknown as { requestAnimationFrame: typeof raf }
+    ).requestAnimationFrame = raf
+    ;(
+      globalThis as unknown as { document: unknown }
+    ).document = { hidden: false }
+
+    const done = accmYieldToUi()
+    expect(raf).toHaveBeenCalledTimes(1)
+    callbacks[0]()
+    await done
+
+    delete (globalThis as unknown as { document?: unknown }).document
+  })
+
   it('accmYieldForPaint uses double rAF', async () => {
     const callbacks: Array<() => void> = []
     const raf = jest.fn((cb: () => void) => {
@@ -42,6 +79,22 @@ describe('accmYieldToUi', () => {
     expect(raf).toHaveBeenCalledTimes(2)
     callbacks[1]()
     await done
+  })
+
+  it('accmYieldForPaint collapses to one timer tick in a hidden tab', async () => {
+    const raf = jest.fn(() => 1)
+    ;(
+      globalThis as unknown as { requestAnimationFrame: typeof raf }
+    ).requestAnimationFrame = raf
+    ;(
+      globalThis as unknown as { document: unknown }
+    ).document = { hidden: true }
+
+    const done = accmYieldForPaint()
+    await done
+    expect(raf).not.toHaveBeenCalled()
+
+    delete (globalThis as unknown as { document?: unknown }).document
   })
 })
 

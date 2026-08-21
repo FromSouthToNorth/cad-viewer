@@ -1,4 +1,4 @@
-import { defaults } from '@mlightcad/common'
+import { AcCmStringKey, defaults } from '@mlightcad/common'
 import {
   AcGiBaseLineStyle,
   AcGiLineTypePatternElement
@@ -69,10 +69,18 @@ export interface AcDbLinetypeTableRecordAttrs
  */
 export class AcDbLinetypeTableRecord extends AcDbSymbolTableRecord<AcDbLinetypeTableRecordAttrs> {
   /**
+   * Monotonic counter bumped on every attribute mutation (post-construction).
+   *
+   * Composed-style caches keyed on this record (e.g. {@link AcDbEntity.lineStyle})
+   * consult this version to detect record redefinition and refresh their entries.
+   */
+  private _linetypeVersion = 0
+
+  /**
    * Creates a new line type table record.
    *
-   * @param attrs - Input attribute values for this linetype table record
-   * @param defaultAttrs - Default values for attributes of this linetype table record
+   * @param attrs - Input attribute values for this line type table record
+   * @param defaultAttrs - Default values for attributes of this line type table record
    *
    * @example
    * ```typescript
@@ -95,6 +103,24 @@ export class AcDbLinetypeTableRecord extends AcDbSymbolTableRecord<AcDbLinetypeT
       totalPatternLength: 0
     })
     super(attrs, defaultAttrs)
+  }
+
+  /**
+   * Current attribute-mutation version for composed-style cache invalidation.
+   */
+  get linetypeVersion() {
+    return this._linetypeVersion
+  }
+
+  /**
+   * Bumps {@link linetypeVersion} so cached composed styles rebuilt.
+   */
+  override setAttr<A extends AcCmStringKey<AcDbLinetypeTableRecordAttrs>>(
+    attrName: A,
+    val?: AcDbLinetypeTableRecordAttrs[A]
+  ) {
+    this._linetypeVersion++
+    return super.setAttr(attrName, val)
   }
 
   /**
