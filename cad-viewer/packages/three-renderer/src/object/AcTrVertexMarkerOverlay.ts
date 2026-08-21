@@ -24,7 +24,7 @@ export class AcTrVertexMarkerOverlay {
     this._geometry = new THREE.BufferGeometry()
     this._material = new THREE.PointsMaterial({
       color: 0x0080ff,
-      size: 7,
+      size: 14,
       sizeAttenuation: false,
       depthTest: false,
       depthWrite: false,

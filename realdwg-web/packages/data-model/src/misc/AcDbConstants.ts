@@ -122,8 +122,8 @@ export const ACDB_GRIPOBJLIMIT_MAX = 32767
 export const ACDB_GRIPS_MIN = 0
 export const ACDB_GRIPS_MAX = 2
 
-/** AutoCAD default value for the GRIPSIZE system variable. */
-export const ACDB_GRIPSIZE_DEFAULT = 5
+/** Default value for the GRIPSIZE system variable. */
+export const ACDB_GRIPSIZE_DEFAULT = 14
 
 /** AutoCAD valid range for the GRIPSIZE system variable. */
 export const ACDB_GRIPSIZE_MIN = 1
