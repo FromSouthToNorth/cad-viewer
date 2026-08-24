@@ -1,6 +1,7 @@
 import type { AcGePoint3dLike } from '@mlightcad/geometry-engine'
 
 import type { AcDbDxfFiler } from '../base/AcDbDxfFiler'
+import { acdbDxfKeywordUpper } from '../base/AcDbDxfKeyword'
 import { AcDb2dPolyline, AcDbPoly2dType } from '../entity/AcDb2dPolyline'
 import { AcDb3dPolyline, AcDbPoly3dType } from '../entity/AcDb3dPolyline'
 import type { AcDbEntity } from '../entity/AcDbEntity'
@@ -141,7 +142,7 @@ function readPolylineVertices(filer: AcDbDxfFiler): PolylineVertexScratch[] {
       continue
     }
 
-    const name = String(peek.value).toUpperCase()
+    const name = acdbDxfKeywordUpper(String(peek.value))
     if (name === 'SEQEND') {
       filer.readItem()
       filer.skipToEndOfObject()

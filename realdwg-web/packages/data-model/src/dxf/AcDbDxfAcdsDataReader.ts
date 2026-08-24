@@ -1,4 +1,5 @@
 import type { AcDbDxfFiler } from '../base/AcDbDxfFiler'
+import { acdbDxfKeywordUpper } from '../base/AcDbDxfKeyword'
 import { acdbCombineDxfBinaryChunks } from '../misc/proxyGraphic'
 
 const ASM_DATA_TYPE = 'ASM_Data'
@@ -11,7 +12,7 @@ export interface AcDbAcdsDataSection {
 
 /** Normalizes a DXF handle for cross-section lookups (uppercase, trimmed). */
 export function acdbNormalizeDxfHandle(handle: string): string {
-  return String(handle).trim().toUpperCase()
+  return acdbDxfKeywordUpper(String(handle).trim())
 }
 
 /**
@@ -91,7 +92,7 @@ export function acdbDxfInAcdsData(filer: AcDbDxfFiler): AcDbAcdsDataSection {
       continue
     }
 
-    const name = String(item.value).toUpperCase()
+    const name = acdbDxfKeywordUpper(String(item.value))
     if (name === 'ENDSEC' || name === 'EOF') {
       filer.readItem()
       break

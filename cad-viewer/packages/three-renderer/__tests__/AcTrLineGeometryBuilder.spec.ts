@@ -12,6 +12,7 @@ import {
   buildFlatLineGeometryMulti,
   buildLineGeometry,
   buildLineGeometryMulti,
+  splitLineSegmentsClusters,
   type AcTrBuiltLineGeometry
 } from '../src/object/AcTrLineGeometryBuilder'
 
@@ -170,5 +171,58 @@ describe('buildFlatLineGeometryMulti', () => {
     expect(
       buildFlatLineGeometryMulti(new Float64Array([1, 2, 3]), material)
     ).toEqual([])
+  })
+})
+
+describe('splitLineSegmentsClusters', () => {
+  it('duplicates vertices per segment into a single cluster', () => {
+    const array = new Float64Array([
+      0, 0, 0,
+      10, 0, 0,
+      10, 10, 0
+    ])
+    const indices = new Uint16Array([0, 1, 1, 2])
+    const clusters = splitLineSegmentsClusters(array, 3, indices)
+    expect(clusters).toHaveLength(1)
+    // 2 segments → 4 vertices duplicated into the cluster array.
+    expect(Array.from(clusters[0]!.array)).toEqual([
+      0, 0, 0,
+      10, 0, 0,
+      10, 0, 0,
+      10, 10, 0
+    ])
+    expect(Array.from(clusters[0]!.indices)).toEqual([0, 1, 2, 3])
+  })
+
+  it('skips degenerate (0,0) index pairs and returns empty', () => {
+    const array = new Float64Array([5, 5, 0])
+    const indices = new Uint16Array([0, 0])
+    expect(splitLineSegmentsClusters(array, 3, indices)).toEqual([])
+  })
+
+  it('splits far-apart segments into separate clusters with exact views', () => {
+    // Each segment is short (no subdivision), but together they span more
+    // than LINE_REBASE_SPLIT_EXTENT → two clusters.
+    const array = new Float64Array([
+      0, 0, 0,
+      400_000, 0, 0,
+      900_000, 0, 0,
+      1_300_000, 0, 0
+    ])
+    const indices = new Uint16Array([0, 1, 2, 3])
+    const clusters = splitLineSegmentsClusters(array, 3, indices)
+    expect(clusters.length).toBeGreaterThan(1)
+    // Each cluster view holds exactly its own segment pair.
+    for (const cluster of clusters) {
+      expect(cluster.indices.length).toBe(2)
+      expect(cluster.array.length).toBe(2 * 3)
+    }
+    // Zero-copy contract: all clusters are views over the same two buffers.
+    expect(
+      clusters.every(c => c.array.buffer === clusters[0]!.array.buffer)
+    ).toBe(true)
+    expect(
+      clusters.every(c => c.indices.buffer === clusters[0]!.indices.buffer)
+    ).toBe(true)
   })
 })

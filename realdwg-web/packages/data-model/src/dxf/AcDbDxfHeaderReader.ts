@@ -1,6 +1,7 @@
 import { AcGePoint3d } from '@mlightcad/geometry-engine'
 
 import type { AcDbDxfFiler } from '../base/AcDbDxfFiler'
+import { acdbDxfKeywordUpper } from '../base/AcDbDxfKeyword'
 import type { AcDbDatabase } from '../database/AcDbDatabase'
 import { AcDbSystemVariables } from '../database/AcDbSystemVariables'
 import { AcDbSysVarManager } from '../database/AcDbSysVarManager'
@@ -21,7 +22,7 @@ export function acdbDxfInHeader(filer: AcDbDxfFiler, db: AcDbDatabase): void {
     const item = filer.peekItem()
     if (!item) break
     if (Number(item.code) === 0) {
-      const name = String(item.value).toUpperCase()
+      const name = acdbDxfKeywordUpper(String(item.value))
       if (name === 'ENDSEC') {
         filer.readItem()
         break
@@ -33,7 +34,7 @@ export function acdbDxfInHeader(filer: AcDbDxfFiler, db: AcDbDatabase): void {
     filer.readItem()
     if (Number(item.code) !== 9) continue
 
-    const varName = String(item.value).toUpperCase()
+    const varName = acdbDxfKeywordUpper(String(item.value))
     applyHeaderVar(filer, db, varName)
   }
 }

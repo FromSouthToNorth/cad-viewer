@@ -1,4 +1,5 @@
 import type { AcDbDxfFiler } from '../base/AcDbDxfFiler'
+import { acdbDxfKeywordUpper } from '../base/AcDbDxfKeyword'
 import type { AcDbObject } from '../base/AcDbObject'
 import { AcDbBlockTableRecord } from '../database/AcDbBlockTableRecord'
 import type { AcDbDatabase } from '../database/AcDbDatabase'
@@ -19,7 +20,7 @@ import { AcDbXrecord } from '../object/AcDbXrecord'
 import { AcDbLayout } from '../object/layout/AcDbLayout'
 
 const normalizeHandle = (handle?: string) =>
-  handle ? handle.trim().toUpperCase() : ''
+  handle ? acdbDxfKeywordUpper(handle.trim()) : ''
 
 /**
  * Streams the DXF OBJECTS section into {@link AcDbDatabase} dictionaries.
@@ -56,7 +57,7 @@ export class AcDbDxfObjectsReader {
         continue
       }
 
-      const name = String(item.value).toUpperCase()
+      const name = acdbDxfKeywordUpper(String(item.value))
       if (name === 'ENDSEC') {
         filer.readItem()
         break
@@ -203,7 +204,7 @@ export class AcDbDxfObjectsReader {
     const objectsByHandle = this.collectLoadedObjectsByHandle()
 
     for (const [key, childHandle] of Object.entries(root.entries)) {
-      const typed = typedByKey[key.toUpperCase()]
+      const typed = typedByKey[acdbDxfKeywordUpper(key)]
       if (!typed) continue
 
       typed.objectId = childHandle
@@ -317,7 +318,9 @@ export class AcDbDxfObjectsReader {
    */
   private linkLayoutsToBlockTableRecords(): void {
     const blockTable = this._db.tables.blockTable
-    const modelSpaceName = AcDbBlockTableRecord.MODEL_SPACE_NAME.toUpperCase()
+    const modelSpaceName = acdbDxfKeywordUpper(
+      AcDbBlockTableRecord.MODEL_SPACE_NAME
+    )
 
     for (const [, layout] of this._db.objects.layout.entries()) {
       if (layout.layoutName === 'Model') {
@@ -347,7 +350,7 @@ export class AcDbDxfObjectsReader {
         for (const btr of blockTable.newIterator()) {
           if (
             btr.isPaperSapce &&
-            btr.name.toUpperCase() !== modelSpaceName &&
+            acdbDxfKeywordUpper(btr.name) !== modelSpaceName &&
             !btr.layoutId
           ) {
             layout.blockTableRecordId = btr.objectId

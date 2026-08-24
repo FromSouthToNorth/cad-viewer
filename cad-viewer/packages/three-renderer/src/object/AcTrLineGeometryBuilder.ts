@@ -746,53 +746,92 @@ export function splitLineSegmentsClusters(
   itemSize: number,
   indices: Uint16Array
 ): AcTrSegmentCluster[] {
-  // Pass 1: subdivide long segments so every piece stays within the step limit.
-  const verts: number[] = []
-  const subIndices: number[] = []
-  const appendVertex = (vi: number): number => {
-    const base = vi * itemSize
-    for (let c = 0; c < itemSize; c++) {
-      verts.push(array[base + c])
-    }
-    return verts.length / itemSize - 1
-  }
-
+  // Pass 0: count subdivided vertices/segments so the typed buffers below can
+  // be sized exactly up front (no number[] accumulation, no from() copies).
+  let totalSegments = 0
+  let validCount = 0
   for (let s = 0; s < indices.length; s += 2) {
-    const v1 = indices[s]
-    const v2 = indices[s + 1]
+    const v1 = indices[s]!
+    const v2 = indices[s + 1]!
     if (v1 === 0 && v2 === 0) {
       continue
     }
     const b1 = v1 * itemSize
     const b2 = v2 * itemSize
     const step = Math.max(
-      Math.abs(array[b1] - array[b2]),
-      Math.abs(array[b1 + 1] - array[b2 + 1]),
+      Math.abs(array[b1]! - array[b2]!),
+      Math.abs(array[b1 + 1]! - array[b2 + 1]!),
+      Math.abs((array[b1 + 2] ?? 0) - (array[b2 + 2] ?? 0))
+    )
+    totalSegments += Math.ceil(step / MAX_VERTEX_STEP)
+    validCount++
+  }
+  if (totalSegments === 0) {
+    return []
+  }
+
+  // Pass 1: subdivide long segments into flat vertices + per-segment pairs.
+  const subVertCount = totalSegments + validCount
+  const verts = new Float64Array(subVertCount * itemSize)
+  const subIndices =
+    subVertCount > 65535
+      ? new Uint32Array(totalSegments * 2)
+      : new Uint16Array(totalSegments * 2)
+  let vertPos = 0
+  let subPos = 0
+
+  const appendVertex = (vi: number): number => {
+    const base = vi * itemSize
+    for (let c = 0; c < itemSize; c++) {
+      verts[vertPos++] = array[base + c]!
+    }
+    return vertPos / itemSize - 1
+  }
+
+  for (let s = 0; s < indices.length; s += 2) {
+    const v1 = indices[s]!
+    const v2 = indices[s + 1]!
+    if (v1 === 0 && v2 === 0) {
+      continue
+    }
+    const b1 = v1 * itemSize
+    const b2 = v2 * itemSize
+    const step = Math.max(
+      Math.abs(array[b1]! - array[b2]!),
+      Math.abs(array[b1 + 1]! - array[b2 + 1]!),
       Math.abs((array[b1 + 2] ?? 0) - (array[b2 + 2] ?? 0))
     )
     const pieces = Math.ceil(step / MAX_VERTEX_STEP)
     if (pieces <= 1) {
-      subIndices.push(appendVertex(v1), appendVertex(v2))
+      subIndices[subPos++] = appendVertex(v1)
+      subIndices[subPos++] = appendVertex(v2)
       continue
     }
     let prev = appendVertex(v1)
     for (let p = 1; p < pieces; p++) {
       const t = p / pieces
-      const base = verts.length
+      const mid = vertPos / itemSize
       for (let c = 0; c < itemSize; c++) {
-        verts.push(array[b1 + c] + (array[b2 + c] - array[b1 + c]) * t)
+        verts[vertPos++] =
+          array[b1 + c]! + (array[b2 + c]! - array[b1 + c]!) * t
       }
-      const mid = base / itemSize
-      subIndices.push(prev, mid)
+      subIndices[subPos++] = prev
+      subIndices[subPos++] = mid
       prev = mid
     }
-    subIndices.push(prev, appendVertex(v2))
+    subIndices[subPos++] = prev
+    subIndices[subPos++] = appendVertex(v2)
   }
 
-  // Pass 2: cluster consecutive subdivided segments by per-axis bbox extent.
+  // Pass 2: cluster consecutive segments by per-axis bbox extent. All clusters
+  // are subarray views over shared buffers — no per-cluster allocation.
   const clusters: AcTrSegmentCluster[] = []
-  let curArray: number[] | null = null
-  let curIndices: number[] = []
+  const outArray = new Float64Array(totalSegments * 2 * itemSize)
+  const outIndices = new Uint16Array(totalSegments * 2)
+  let clusterArrayStart = -1
+  let clusterIdxStart = 0
+  let outArrayPos = 0
+  let outIdxPos = 0
   let minX = 0
   let minY = 0
   let minZ = 0
@@ -801,15 +840,15 @@ export function splitLineSegmentsClusters(
   let maxZ = 0
 
   const startCluster = () => {
-    curArray = []
-    curIndices = []
+    clusterArrayStart = outArrayPos
+    clusterIdxStart = outIdxPos
     minX = minY = minZ = Infinity
     maxX = maxY = maxZ = -Infinity
   }
   const extendByVertex = (vi: number) => {
     const base = vi * itemSize
-    const x = verts[base]
-    const y = verts[base + 1]
+    const x = verts[base]!
+    const y = verts[base + 1]!
     const z = verts[base + 2] ?? 0
     if (x < minX) minX = x
     if (x > maxX) maxX = x
@@ -824,29 +863,33 @@ export function splitLineSegmentsClusters(
     Math.max(nMaxX - nMinX, nMaxY - nMinY, nMaxZ - nMinZ) >
     LINE_REBASE_SPLIT_EXTENT
 
-  for (let s = 0; s < subIndices.length; s += 2) {
-    const i1 = subIndices[s]
-    const i2 = subIndices[s + 1]
-    if (curArray == null) {
+  const pushCluster = () => {
+    clusters.push({
+      array: outArray.subarray(clusterArrayStart, outArrayPos),
+      indices: outIndices.subarray(clusterIdxStart, outIdxPos)
+    })
+  }
+
+  for (let s = 0; s < subPos; s += 2) {
+    const i1 = subIndices[s]!
+    const i2 = subIndices[s + 1]!
+    if (clusterArrayStart < 0) {
       startCluster()
     }
     const b1 = i1 * itemSize
     const b2 = i2 * itemSize
-    const nMinX = Math.min(minX, verts[b1], verts[b2])
-    const nMaxX = Math.max(maxX, verts[b1], verts[b2])
-    const nMinY = Math.min(minY, verts[b1 + 1], verts[b2 + 1])
-    const nMaxY = Math.max(maxY, verts[b1 + 1], verts[b2 + 1])
+    const nMinX = Math.min(minX, verts[b1]!, verts[b2]!)
+    const nMaxX = Math.max(maxX, verts[b1]!, verts[b2]!)
+    const nMinY = Math.min(minY, verts[b1 + 1]!, verts[b2 + 1]!)
+    const nMaxY = Math.max(maxY, verts[b1 + 1]!, verts[b2 + 1]!)
     const nMinZ = Math.min(minZ, verts[b1 + 2] ?? 0, verts[b2 + 2] ?? 0)
     const nMaxZ = Math.max(maxZ, verts[b1 + 2] ?? 0, verts[b2 + 2] ?? 0)
 
     if (
-      curIndices.length > 0 &&
+      outIdxPos > clusterIdxStart &&
       exceedsExtent(nMinX, nMaxX, nMinY, nMaxY, nMinZ, nMaxZ)
     ) {
-      clusters.push({
-        array: Float64Array.from(curArray!),
-        indices: new Uint16Array(curIndices)
-      })
+      pushCluster()
       startCluster()
       // Re-probe with the fresh cluster.
       extendByVertex(i1)
@@ -863,20 +906,18 @@ export function splitLineSegmentsClusters(
     const base1 = i1 * itemSize
     const base2 = i2 * itemSize
     for (let c = 0; c < itemSize; c++) {
-      curArray!.push(verts[base1 + c])
+      outArray[outArrayPos++] = verts[base1 + c]!
     }
-    const l1 = curArray!.length / itemSize - 1
+    const l1 = (outArrayPos - clusterArrayStart) / itemSize - 1
     for (let c = 0; c < itemSize; c++) {
-      curArray!.push(verts[base2 + c])
+      outArray[outArrayPos++] = verts[base2 + c]!
     }
-    const l2 = curArray!.length / itemSize - 1
-    curIndices.push(l1, l2)
+    const l2 = (outArrayPos - clusterArrayStart) / itemSize - 1
+    outIndices[outIdxPos++] = l1
+    outIndices[outIdxPos++] = l2
   }
-  if (curArray != null && curIndices.length > 0) {
-    clusters.push({
-      array: Float64Array.from(curArray),
-      indices: new Uint16Array(curIndices)
-    })
+  if (clusterArrayStart >= 0 && outIdxPos > clusterIdxStart) {
+    pushCluster()
   }
   return clusters
 }

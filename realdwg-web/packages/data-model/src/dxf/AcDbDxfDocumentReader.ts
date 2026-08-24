@@ -6,6 +6,7 @@ import {
 import { AcGePoint3d } from '@mlightcad/geometry-engine'
 
 import { AcDbDxfFiler } from '../base/AcDbDxfFiler'
+import { acdbDxfKeywordUpper } from '../base/AcDbDxfKeyword'
 import type { AcDbObjectId } from '../base/AcDbObject'
 import {
   AcDbBlockTableRecord,
@@ -102,7 +103,7 @@ export class AcDbDxfDocumentReader {
       if (!item) break
       if (Number(item.code) !== 0) continue
 
-      const name = String(item.value).toUpperCase()
+      const name = acdbDxfKeywordUpper(String(item.value))
       if (name === 'EOF') break
       if (name === 'SECTION') {
         const sectionName = this.readSectionName(filer)
@@ -122,7 +123,7 @@ export class AcDbDxfDocumentReader {
   private readSectionName(filer: AcDbDxfFiler): string {
     const item = filer.readItem()
     if (item && Number(item.code) === 2) {
-      return String(item.value).toUpperCase()
+      return acdbDxfKeywordUpper(String(item.value))
     }
     if (item) filer.pushBackItem(item)
     return ''
@@ -213,7 +214,7 @@ export class AcDbDxfDocumentReader {
       const item = filer.readItem()
       if (!item) break
       if (Number(item.code) === 0) {
-        const name = String(item.value).toUpperCase()
+        const name = acdbDxfKeywordUpper(String(item.value))
         if (name === 'ENDSEC') break
         // Unexpected — push back and stop
         filer.pushBackItem(item)
@@ -250,7 +251,7 @@ export class AcDbDxfDocumentReader {
         continue
       }
 
-      const name = String(item.value).toUpperCase()
+      const name = acdbDxfKeywordUpper(String(item.value))
       if (name === 'ENDSEC') {
         filer.readItem()
         break
@@ -328,7 +329,7 @@ export class AcDbDxfDocumentReader {
         continue
       }
 
-      const name = String(item.value).toUpperCase()
+      const name = acdbDxfKeywordUpper(String(item.value))
       if (name === 'ENDSEC') {
         filer.readItem()
         break
@@ -355,7 +356,7 @@ export class AcDbDxfDocumentReader {
       const code = Number(item.code)
       if (code === 0) return ''
       filer.readItem()
-      if (code === 2) return String(item.value).toUpperCase()
+      if (code === 2) return acdbDxfKeywordUpper(String(item.value))
     }
     return ''
   }
@@ -461,7 +462,7 @@ export class AcDbDxfDocumentReader {
         continue
       }
 
-      const name = String(item.value).toUpperCase()
+      const name = acdbDxfKeywordUpper(String(item.value))
       if (name === 'ENDTAB') {
         filer.readItem()
         break
@@ -493,7 +494,7 @@ export class AcDbDxfDocumentReader {
         continue
       }
 
-      const name = String(item.value).toUpperCase()
+      const name = acdbDxfKeywordUpper(String(item.value))
       if (name === 'ENDTAB') {
         filer.readItem()
         break
@@ -526,7 +527,7 @@ export class AcDbDxfDocumentReader {
       if (!item) break
       if (
         Number(item.code) === 0 &&
-        String(item.value).toUpperCase() === 'ENDTAB'
+        acdbDxfKeywordUpper(String(item.value)) === 'ENDTAB'
       ) {
         break
       }
@@ -545,7 +546,7 @@ export class AcDbDxfDocumentReader {
         continue
       }
 
-      const name = String(item.value).toUpperCase()
+      const name = acdbDxfKeywordUpper(String(item.value))
       if (name === 'ENDSEC') {
         filer.readItem()
         break
@@ -586,7 +587,7 @@ export class AcDbDxfDocumentReader {
         continue
       }
 
-      const typeName = String(item.value).toUpperCase()
+      const typeName = acdbDxfKeywordUpper(String(item.value))
       if (typeName === 'ENDBLK') {
         filer.readItem()
         filer.skipToEndOfObject()
@@ -759,7 +760,7 @@ export class AcDbDxfDocumentReader {
         continue
       }
 
-      const name = String(item.value).toUpperCase()
+      const name = acdbDxfKeywordUpper(String(item.value))
       if (name === 'ENDSEC') {
         filer.readItem()
         break
@@ -885,7 +886,7 @@ export class AcDbDxfDocumentReader {
       if (!item) break
       if (
         Number(item.code) === 0 &&
-        String(item.value).toUpperCase() === 'ENDSEC'
+        acdbDxfKeywordUpper(String(item.value)) === 'ENDSEC'
       ) {
         break
       }
