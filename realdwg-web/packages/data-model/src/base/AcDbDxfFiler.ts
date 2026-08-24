@@ -18,6 +18,7 @@ import {
   acdbDxfIsInt32Code,
   acdbDxfValueType
 } from './AcDbDxfGroupCodeTypes'
+import { acdbDxfKeywordUpper } from './AcDbDxfKeyword'
 import type { AcDbDxfPair } from './AcDbDxfPair'
 import {
   acdbCreateDxfPairReader,
@@ -230,9 +231,12 @@ export class AcDbDxfFiler {
     if (!this._handleMap.has(key)) {
       // If key is already a valid hex handle, preserve it
       if (/^[0-9A-F]+$/i.test(key)) {
-        this._handleMap.set(key, key.toUpperCase())
+        this._handleMap.set(key, acdbDxfKeywordUpper(key))
       } else {
-        this._handleMap.set(key, this._nextHandle.toString(16).toUpperCase())
+        this._handleMap.set(
+          key,
+          acdbDxfKeywordUpper(this._nextHandle.toString(16))
+        )
         this._nextHandle += 1
       }
     }

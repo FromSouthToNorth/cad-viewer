@@ -775,6 +775,64 @@ const closeNotificationCenter = () => {
   right: 0;
   bottom: 0;
   z-index: 6;
+  height: var(--ml-status-bar-height);
+}
+
+/*
+ * Frosted glass chrome shared by the header and footer. The glass lives on a
+ * pseudo-element so the backdrop filter does not turn the header/footer into
+ * containing blocks for fixed-position descendants (e.g. ribbon keytips).
+ */
+.ml-cad-header::before,
+.ml-cad-footer::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  backdrop-filter: blur(14px) saturate(1.4);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+}
+
+.ml-cad-viewer-container.ml-theme-light .ml-cad-header::before {
+  background: rgba(255, 255, 255, 0.68);
+  border-bottom: 1px solid rgba(31, 45, 61, 0.08);
+  box-shadow: 0 2px 12px rgba(31, 45, 61, 0.06);
+}
+
+.ml-cad-viewer-container.ml-theme-light .ml-cad-footer::before {
+  background: rgba(255, 255, 255, 0.68);
+  border-top: 1px solid rgba(31, 45, 61, 0.08);
+  box-shadow: 0 -2px 12px rgba(31, 45, 61, 0.06);
+}
+
+.ml-cad-viewer-container.ml-theme-dark .ml-cad-header::before {
+  background: rgba(20, 20, 20, 0.68);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+}
+
+.ml-cad-viewer-container.ml-theme-dark .ml-cad-footer::before {
+  background: rgba(20, 20, 20, 0.68);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.35);
+}
+
+/* Let the frosted glass show through the ribbon's own surfaces. */
+.ml-cad-header .ml-ribbon {
+  background: transparent;
+  border-color: transparent;
+}
+
+.ml-cad-header .ml-ribbon__header,
+.ml-cad-header .ml-ribbon__panel {
+  background: transparent;
+}
+
+/* Let the frosted glass show through the status bar's own surface. */
+.ml-cad-viewer-container .ml-cad-footer .ml-status-bar {
+  background-color: transparent;
+  border-color: transparent;
 }
 
 /* Position the filename display at the top center of the viewer */

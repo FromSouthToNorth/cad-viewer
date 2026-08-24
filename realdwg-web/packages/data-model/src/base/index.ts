@@ -51,6 +51,7 @@ export {
   acdbChunkDxfMTextContents,
   acdbChunkUtf8ByMaxBytes
 } from './AcDbDxfStringChunks'
+export { acdbDxfKeywordUpper } from './AcDbDxfKeyword'
 export type { AcDbDxfMTextContentChunk } from './AcDbDxfStringChunks'
 export {
   AcDbHostApplicationServices,

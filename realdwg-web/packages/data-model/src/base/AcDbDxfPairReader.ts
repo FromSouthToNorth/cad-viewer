@@ -799,6 +799,9 @@ export function acdbMakeBinaryDxfPairReader(
   const legacyR12 = options.legacyR12 ?? false
   const PREFIX = 22
   const view = new DataView(data.buffer, data.byteOffset, data.byteLength)
+  // One decoder for the whole stream: binary DXF strings are short and
+  // numerous, and TextDecoder construction dominates their decode cost.
+  const stringDecoder = new TextDecoder(encoding)
   let offset = data.length >= PREFIX ? PREFIX : data.length
   let lookahead: AcDbDxfPair | undefined
   let lookaheadValid = false
@@ -831,7 +834,7 @@ export function acdbMakeBinaryDxfPairReader(
     if (offset >= data.length) return undefined
     const bytes = data.subarray(start, offset)
     offset += 1
-    return new TextDecoder(encoding).decode(bytes)
+    return stringDecoder.decode(bytes)
   }
 
   function readInt16(): number | undefined {

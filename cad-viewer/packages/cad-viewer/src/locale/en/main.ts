@@ -296,6 +296,8 @@ export default {
       properties: 'Open the Properties palette for the current selection.',
       quickSelect:
         'Open Quick Select to filter and select entities by criteria.',
+      invertSelection:
+        'Invert the current selection set: selected entities are deselected and all others are selected (Ctrl+Shift+I).',
       countList: 'Open the Count palette to view and manage block counts.',
       missingResources:
         'Open the Missing / External Resources palette for fonts, images, and xrefs.',
@@ -411,6 +413,7 @@ export default {
       redo: 'Redo',
       properties: 'Properties',
       quickSelect: 'Quick\nSelect',
+      invertSelection: 'Invert\nSelect',
       countList: 'Count',
       drawingUnits: 'Drawing\nUnits',
       attachDwg: 'Attach\nDWG',

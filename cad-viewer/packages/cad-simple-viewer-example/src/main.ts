@@ -13,6 +13,7 @@ import {
   acedIsCompactUiLayout,
   type AcEdUiTheme,
   AcEdOpenMode,
+  type AcTrView2d,
   DXF_PARSER_WORKER_FILE,
   LIBREDWG_PARSER_WORKER_FILE,
   MTEXT_RENDERER_WORKER_FILE
@@ -20,8 +21,10 @@ import {
 import {
   AcDbSystemVariables,
   AcDbSysVarManager,
+  AcGeBox2d,
   log
 } from '@mlightcad/data-model'
+import { AcTrMTextRenderer } from '@mlightcad/three-renderer'
 
 import { setupAgentIntegration } from './agentIntegration'
 import { AGENT_TOOLBAR_ITEM } from './agentToolbarItem'
@@ -86,6 +89,68 @@ function installOpenProfConsoleCapture(): void {
       w.__OPENPROF_REPORT__ = text
       w.__OPENPROF_DONE__ = true
     }
+  }
+}
+
+/**
+ * Query-gated debug hooks (`?hooks=1`) for browser integration verification.
+ *
+ * Exposes lazy accessors over the live viewer/renderer so measurement
+ * scripts can read renderer.info, drive layer toggles and box selection,
+ * and query the MTEXT glyph cache without touching library code. All
+ * accessors evaluate lazily and are safe to call before a file is open.
+ */
+function installDebugHooks(): void {
+  if (!new URLSearchParams(window.location.search).has('hooks')) {
+    return
+  }
+  const w = window as Window & { __cadDebugHooks?: Record<string, unknown> }
+
+  const getView = (): AcTrView2d | null =>
+    AcApDocManager.instance?.curView ?? null
+  const getDoc = () => AcApDocManager.instance?.curDocument ?? null
+
+  w.__cadDebugHooks = {
+    rendererInfo: () => {
+      const info = getView()?.renderer?.internalRenderer?.info
+      if (!info) return null
+      return {
+        calls: info.render.calls,
+        triangles: info.render.triangles,
+        points: info.render.points,
+        lines: info.render.lines,
+        geometries: info.memory.geometries,
+        textures: info.memory.textures,
+        programs: info.programs?.length ?? -1
+      }
+    },
+    mtextCacheStats: () =>
+      AcTrMTextRenderer.getInstance().getContentGlyphCacheStats(),
+    setMtextCacheEnabled: (enabled: boolean) => {
+      AcTrMTextRenderer.getInstance().setContentGlyphCacheEnabled(enabled)
+    },
+    layerNames: () => getDoc()?.layerStore.getLayers().map(l => l.name) ?? [],
+    setLayerOn: (name: string, isOn: boolean) =>
+      getDoc()?.layerStore.setLayerOn(name, isOn) ?? false,
+    selectByBox: (
+      x0: number,
+      y0: number,
+      x1: number,
+      y1: number,
+      mode: 'window' | 'crossing',
+      action: 'add' | 'remove' | 'replace'
+    ) => {
+      const view = getView()
+      if (!view) return null
+      const box = new AcGeBox2d(
+        { x: Math.min(x0, x1), y: Math.min(y0, y1) },
+        { x: Math.max(x0, x1), y: Math.max(y0, y1) }
+      )
+      const startedAt = performance.now()
+      view.selectByBoxWithMode(box, mode, action)
+      return performance.now() - startedAt
+    },
+    sceneBusy: () => getView()?.isProcessingEntities ?? false
   }
 }
 
@@ -1240,6 +1305,8 @@ class CadViewerApp {
     document.querySelectorAll('.popup-message').forEach(el => el.remove())
   }
 }
+
+installDebugHooks()
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {

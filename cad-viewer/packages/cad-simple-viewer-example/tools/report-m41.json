@@ -1,0 +1,59 @@
+{
+  "generatedAt": "2026-08-24T06:08:20.025Z",
+  "scenario": "m41",
+  "results": {
+    "m41": {
+      "duplicate": {
+        "workerPosts": 10036,
+        "workersCreated": 4,
+        "cacheStats": {
+          "count": 1,
+          "estimatedBytes": 10014
+        },
+        "profile": {
+          "totalMs": 44338,
+          "readMs": 589,
+          "parseMs": 239,
+          "entityMs": 296,
+          "convertMs": 43749,
+          "cacheHits": 0,
+          "cacheMisses": 0
+        }
+      },
+      "unique": {
+        "workerPosts": 10032,
+        "workersCreated": 4,
+        "cacheStats": {
+          "count": 0,
+          "estimatedBytes": 0
+        },
+        "profile": {
+          "totalMs": 121128,
+          "readMs": 427,
+          "parseMs": 171,
+          "entityMs": 227,
+          "convertMs": 120701,
+          "cacheHits": 0,
+          "cacheMisses": 0
+        }
+      },
+      "duplicate-cache-off": {
+        "workerPosts": 10036,
+        "workersCreated": 4,
+        "cacheStats": {
+          "count": 0,
+          "estimatedBytes": 0
+        },
+        "profile": {
+          "totalMs": 18056,
+          "readMs": 374,
+          "parseMs": 157,
+          "entityMs": 192,
+          "convertMs": 17682,
+          "cacheHits": 0,
+          "cacheMisses": 0
+        }
+      }
+    }
+  }
+}

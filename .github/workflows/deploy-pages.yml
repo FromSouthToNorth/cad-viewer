@@ -1,0 +1,74 @@
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches: [main, dev_hy]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # 联合工作区:cad-viewer 通过 link: 覆盖引用 realdwg-web 源码,
+      # 需先构建 realdwg-web 的 4 个联动包(顺序同 bootstrap.mjs)。
+      - name: Install realdwg-web dependencies
+        working-directory: realdwg-web
+        run: pnpm install
+
+      - name: Build realdwg-web linked packages
+        working-directory: realdwg-web
+        run: pnpm exec nx run-many -t build -p @mlightcad/common @mlightcad/geometry-engine @mlightcad/graphic-interface @mlightcad/data-model
+
+      - name: Install cad-viewer dependencies
+        working-directory: cad-viewer
+        run: pnpm install
+
+      - name: Build cad-viewer
+        working-directory: cad-viewer
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: pnpm build
+
+      - uses: actions/configure-pages@v5
+
+      # 站点根路径直接是完整查看器应用。改为简单查看器:
+      #   cad-viewer/packages/cad-simple-viewer-example/dist
+      # 改回聚合落地页:恢复 docs:build + pre-serve 步骤,并改回
+      #   cad-viewer/packages/examples/public
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: cad-viewer/packages/cad-viewer-example/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    # github-pages 是保留环境,只能在默认分支(main)的 workflow 中使用,
+    # dev_hy 引用它会直接失败导致必需检查变红、PR 无法合并。
+    # 因此只在 main 上真正部署,其余分支以成功空操作收尾,保持检查绿色。
+    steps:
+      - name: Deploy to GitHub Pages
+        if: github.ref == 'refs/heads/main'
+        id: deployment
+        uses: actions/deploy-pages@v4
+      - name: Skip pages deployment on non-default branches
+        if: github.ref != 'refs/heads/main'
+        run: echo "GitHub Pages 仅从 main 分支部署,跳过。"

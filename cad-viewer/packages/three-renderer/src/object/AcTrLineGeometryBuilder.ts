@@ -581,9 +581,12 @@ export function splitPointRuns(points: AcGePoint3dLike[]): AcGePoint3dLike[][] {
  *   than two points are provided.
  */
 export function buildLineGeometryMulti(
-  points: AcGePoint3dLike[],
+  points: AcGePoint3dLike[] | Float64Array,
   material: THREE.Material
 ): AcTrBuiltLineGeometry[] {
+  if (points instanceof Float64Array) {
+    return buildFlatLineGeometryMulti(points, material)
+  }
   if (points.length < 2) {
     return []
   }
@@ -596,6 +599,123 @@ export function buildLineGeometryMulti(
     }
   }
   return results
+}
+
+/**
+ * True when the flat strip would require long-step subdivision or rebase run
+ * splitting in the object pipeline (mirrors {@link subdivideLongSteps} and
+ * {@link splitPointRuns} thresholds).
+ */
+function flatNeedsSubdivideOrSplit(flat: Float64Array): boolean {
+  const vertexCount = flat.length / 3
+  let minX = flat[0]!
+  let maxX = flat[0]!
+  let minY = flat[1]!
+  let maxY = flat[1]!
+  let minZ = flat[2]!
+  let maxZ = flat[2]!
+  for (let i = 1; i < vertexCount; i++) {
+    const i3 = i * 3
+    const x = flat[i3]!
+    const y = flat[i3 + 1]!
+    const z = flat[i3 + 2]!
+    const step = Math.max(
+      Math.abs(x - flat[i3 - 3]!),
+      Math.abs(y - flat[i3 - 2]!),
+      Math.abs(z - flat[i3 - 1]!)
+    )
+    if (step > MAX_VERTEX_STEP) {
+      return true
+    }
+    if (x < minX) minX = x
+    if (x > maxX) maxX = x
+    if (y < minY) minY = y
+    if (y > maxY) maxY = y
+    if (z < minZ) minZ = z
+    if (z > maxZ) maxZ = z
+  }
+  return (
+    Math.max(maxX - minX, maxY - minY, maxZ - minZ) > LINE_REBASE_SPLIT_EXTENT
+  )
+}
+
+/**
+ * Builds rebased line geometry from interleaved xyz `Float64Array` vertices
+ * without materializing per-point objects (arc/ellipse densification path).
+ *
+ * Behavior mirrors {@link buildLineGeometryMulti} for the common case of a
+ * single precision-safe run: same bbox-center rebase, same indexed (or fat
+ * segment) layout. Strips needing long-step subdivision or rebase splitting
+ * (huge-coordinate arcs) fall back to the object pipeline so the rare path
+ * keeps identical output.
+ */
+export function buildFlatLineGeometryMulti(
+  flat: Float64Array,
+  material: THREE.Material
+): AcTrBuiltLineGeometry[] {
+  const vertexCount = flat.length / 3
+  if (vertexCount < 2) {
+    return []
+  }
+  if (flatNeedsSubdivideOrSplit(flat)) {
+    // Rare: radii/coordinates beyond the precision-safe extents. Reuse the
+    // object pipeline for identical subdivision + run-splitting behavior.
+    const points: AcGePoint3dLike[] = new Array(vertexCount)
+    for (let i = 0; i < vertexCount; i++) {
+      const i3 = i * 3
+      points[i] = { x: flat[i3]!, y: flat[i3 + 1]!, z: flat[i3 + 2]! }
+    }
+    return buildLineGeometryMulti(points, material)
+  }
+
+  const box = new THREE.Box3()
+  for (let i = 0; i < vertexCount; i++) {
+    const i3 = i * 3
+    box.expandByPoint(_point.set(flat[i3]!, flat[i3 + 1]!, flat[i3 + 2]!))
+  }
+  const worldOffset = box.getCenter(new THREE.Vector3())
+
+  if (material instanceof LineMaterial) {
+    const segmentPositions = new Float32Array((vertexCount - 1) * 6)
+    for (let i = 0, pos = 0; i < vertexCount - 1; i++) {
+      const i3 = i * 3
+      segmentPositions[pos++] = flat[i3]! - worldOffset.x
+      segmentPositions[pos++] = flat[i3 + 1]! - worldOffset.y
+      segmentPositions[pos++] = flat[i3 + 2]! - worldOffset.z
+      segmentPositions[pos++] = flat[i3 + 3]! - worldOffset.x
+      segmentPositions[pos++] = flat[i3 + 4]! - worldOffset.y
+      segmentPositions[pos++] = flat[i3 + 5]! - worldOffset.z
+    }
+    const geometry = new LineSegmentsGeometry()
+    geometry.setPositions(segmentPositions)
+    AcTrBufferGeometryUtil.safeComputeBoundingBox(
+      geometry as unknown as THREE.BufferGeometry
+    )
+    AcTrBufferGeometryUtil.safeComputeBoundingSphere(
+      geometry as unknown as THREE.BufferGeometry
+    )
+    return [{ kind: 'fat', geometry, worldOffset, wcsBbox: box, material }]
+  }
+
+  const vertices = new Float32Array(vertexCount * 3)
+  const indices =
+    vertexCount * 2 > 65535
+      ? new Uint32Array(vertexCount * 2)
+      : new Uint16Array(vertexCount * 2)
+  for (let i = 0, pos = 0; i < vertexCount; i++) {
+    const i3 = i * 3
+    vertices[pos++] = flat[i3]! - worldOffset.x
+    vertices[pos++] = flat[i3 + 1]! - worldOffset.y
+    vertices[pos++] = flat[i3 + 2]! - worldOffset.z
+  }
+  for (let i = 0, pos = 0; i < vertexCount - 1; i++) {
+    indices[pos++] = i
+    indices[pos++] = i + 1
+  }
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3))
+  geometry.setIndex(new THREE.BufferAttribute(indices, 1))
+  return [{ kind: 'basic', geometry, worldOffset, wcsBbox: box, material }]
 }
 
 /** One cluster of subdivided, precision-safe line segments. */
@@ -626,53 +746,92 @@ export function splitLineSegmentsClusters(
   itemSize: number,
   indices: Uint16Array
 ): AcTrSegmentCluster[] {
-  // Pass 1: subdivide long segments so every piece stays within the step limit.
-  const verts: number[] = []
-  const subIndices: number[] = []
-  const appendVertex = (vi: number): number => {
-    const base = vi * itemSize
-    for (let c = 0; c < itemSize; c++) {
-      verts.push(array[base + c])
-    }
-    return verts.length / itemSize - 1
-  }
-
+  // Pass 0: count subdivided vertices/segments so the typed buffers below can
+  // be sized exactly up front (no number[] accumulation, no from() copies).
+  let totalSegments = 0
+  let validCount = 0
   for (let s = 0; s < indices.length; s += 2) {
-    const v1 = indices[s]
-    const v2 = indices[s + 1]
+    const v1 = indices[s]!
+    const v2 = indices[s + 1]!
     if (v1 === 0 && v2 === 0) {
       continue
     }
     const b1 = v1 * itemSize
     const b2 = v2 * itemSize
     const step = Math.max(
-      Math.abs(array[b1] - array[b2]),
-      Math.abs(array[b1 + 1] - array[b2 + 1]),
+      Math.abs(array[b1]! - array[b2]!),
+      Math.abs(array[b1 + 1]! - array[b2 + 1]!),
+      Math.abs((array[b1 + 2] ?? 0) - (array[b2 + 2] ?? 0))
+    )
+    totalSegments += Math.ceil(step / MAX_VERTEX_STEP)
+    validCount++
+  }
+  if (totalSegments === 0) {
+    return []
+  }
+
+  // Pass 1: subdivide long segments into flat vertices + per-segment pairs.
+  const subVertCount = totalSegments + validCount
+  const verts = new Float64Array(subVertCount * itemSize)
+  const subIndices =
+    subVertCount > 65535
+      ? new Uint32Array(totalSegments * 2)
+      : new Uint16Array(totalSegments * 2)
+  let vertPos = 0
+  let subPos = 0
+
+  const appendVertex = (vi: number): number => {
+    const base = vi * itemSize
+    for (let c = 0; c < itemSize; c++) {
+      verts[vertPos++] = array[base + c]!
+    }
+    return vertPos / itemSize - 1
+  }
+
+  for (let s = 0; s < indices.length; s += 2) {
+    const v1 = indices[s]!
+    const v2 = indices[s + 1]!
+    if (v1 === 0 && v2 === 0) {
+      continue
+    }
+    const b1 = v1 * itemSize
+    const b2 = v2 * itemSize
+    const step = Math.max(
+      Math.abs(array[b1]! - array[b2]!),
+      Math.abs(array[b1 + 1]! - array[b2 + 1]!),
       Math.abs((array[b1 + 2] ?? 0) - (array[b2 + 2] ?? 0))
     )
     const pieces = Math.ceil(step / MAX_VERTEX_STEP)
     if (pieces <= 1) {
-      subIndices.push(appendVertex(v1), appendVertex(v2))
+      subIndices[subPos++] = appendVertex(v1)
+      subIndices[subPos++] = appendVertex(v2)
       continue
     }
     let prev = appendVertex(v1)
     for (let p = 1; p < pieces; p++) {
       const t = p / pieces
-      const base = verts.length
+      const mid = vertPos / itemSize
       for (let c = 0; c < itemSize; c++) {
-        verts.push(array[b1 + c] + (array[b2 + c] - array[b1 + c]) * t)
+        verts[vertPos++] =
+          array[b1 + c]! + (array[b2 + c]! - array[b1 + c]!) * t
       }
-      const mid = base / itemSize
-      subIndices.push(prev, mid)
+      subIndices[subPos++] = prev
+      subIndices[subPos++] = mid
       prev = mid
     }
-    subIndices.push(prev, appendVertex(v2))
+    subIndices[subPos++] = prev
+    subIndices[subPos++] = appendVertex(v2)
   }
 
-  // Pass 2: cluster consecutive subdivided segments by per-axis bbox extent.
+  // Pass 2: cluster consecutive segments by per-axis bbox extent. All clusters
+  // are subarray views over shared buffers — no per-cluster allocation.
   const clusters: AcTrSegmentCluster[] = []
-  let curArray: number[] | null = null
-  let curIndices: number[] = []
+  const outArray = new Float64Array(totalSegments * 2 * itemSize)
+  const outIndices = new Uint16Array(totalSegments * 2)
+  let clusterArrayStart = -1
+  let clusterIdxStart = 0
+  let outArrayPos = 0
+  let outIdxPos = 0
   let minX = 0
   let minY = 0
   let minZ = 0
@@ -681,15 +840,15 @@ export function splitLineSegmentsClusters(
   let maxZ = 0
 
   const startCluster = () => {
-    curArray = []
-    curIndices = []
+    clusterArrayStart = outArrayPos
+    clusterIdxStart = outIdxPos
     minX = minY = minZ = Infinity
     maxX = maxY = maxZ = -Infinity
   }
   const extendByVertex = (vi: number) => {
     const base = vi * itemSize
-    const x = verts[base]
-    const y = verts[base + 1]
+    const x = verts[base]!
+    const y = verts[base + 1]!
     const z = verts[base + 2] ?? 0
     if (x < minX) minX = x
     if (x > maxX) maxX = x
@@ -704,29 +863,33 @@ export function splitLineSegmentsClusters(
     Math.max(nMaxX - nMinX, nMaxY - nMinY, nMaxZ - nMinZ) >
     LINE_REBASE_SPLIT_EXTENT
 
-  for (let s = 0; s < subIndices.length; s += 2) {
-    const i1 = subIndices[s]
-    const i2 = subIndices[s + 1]
-    if (curArray == null) {
+  const pushCluster = () => {
+    clusters.push({
+      array: outArray.subarray(clusterArrayStart, outArrayPos),
+      indices: outIndices.subarray(clusterIdxStart, outIdxPos)
+    })
+  }
+
+  for (let s = 0; s < subPos; s += 2) {
+    const i1 = subIndices[s]!
+    const i2 = subIndices[s + 1]!
+    if (clusterArrayStart < 0) {
       startCluster()
     }
     const b1 = i1 * itemSize
     const b2 = i2 * itemSize
-    const nMinX = Math.min(minX, verts[b1], verts[b2])
-    const nMaxX = Math.max(maxX, verts[b1], verts[b2])
-    const nMinY = Math.min(minY, verts[b1 + 1], verts[b2 + 1])
-    const nMaxY = Math.max(maxY, verts[b1 + 1], verts[b2 + 1])
+    const nMinX = Math.min(minX, verts[b1]!, verts[b2]!)
+    const nMaxX = Math.max(maxX, verts[b1]!, verts[b2]!)
+    const nMinY = Math.min(minY, verts[b1 + 1]!, verts[b2 + 1]!)
+    const nMaxY = Math.max(maxY, verts[b1 + 1]!, verts[b2 + 1]!)
     const nMinZ = Math.min(minZ, verts[b1 + 2] ?? 0, verts[b2 + 2] ?? 0)
     const nMaxZ = Math.max(maxZ, verts[b1 + 2] ?? 0, verts[b2 + 2] ?? 0)
 
     if (
-      curIndices.length > 0 &&
+      outIdxPos > clusterIdxStart &&
       exceedsExtent(nMinX, nMaxX, nMinY, nMaxY, nMinZ, nMaxZ)
     ) {
-      clusters.push({
-        array: Float64Array.from(curArray!),
-        indices: new Uint16Array(curIndices)
-      })
+      pushCluster()
       startCluster()
       // Re-probe with the fresh cluster.
       extendByVertex(i1)
@@ -743,20 +906,18 @@ export function splitLineSegmentsClusters(
     const base1 = i1 * itemSize
     const base2 = i2 * itemSize
     for (let c = 0; c < itemSize; c++) {
-      curArray!.push(verts[base1 + c])
+      outArray[outArrayPos++] = verts[base1 + c]!
     }
-    const l1 = curArray!.length / itemSize - 1
+    const l1 = (outArrayPos - clusterArrayStart) / itemSize - 1
     for (let c = 0; c < itemSize; c++) {
-      curArray!.push(verts[base2 + c])
+      outArray[outArrayPos++] = verts[base2 + c]!
     }
-    const l2 = curArray!.length / itemSize - 1
-    curIndices.push(l1, l2)
+    const l2 = (outArrayPos - clusterArrayStart) / itemSize - 1
+    outIndices[outIdxPos++] = l1
+    outIndices[outIdxPos++] = l2
   }
-  if (curArray != null && curIndices.length > 0) {
-    clusters.push({
-      array: Float64Array.from(curArray),
-      indices: new Uint16Array(curIndices)
-    })
+  if (clusterArrayStart >= 0 && outIdxPos > clusterIdxStart) {
+    pushCluster()
   }
   return clusters
 }

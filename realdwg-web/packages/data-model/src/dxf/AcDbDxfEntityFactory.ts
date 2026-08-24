@@ -1,6 +1,7 @@
 import { AcGePoint3d, AcGeVector3d } from '@mlightcad/geometry-engine'
 
 import type { AcDbDxfFiler } from '../base/AcDbDxfFiler'
+import { acdbDxfKeywordUpper } from '../base/AcDbDxfKeyword'
 import { AcDb3dSolid } from '../entity/AcDb3dSolid'
 import { AcDbArc } from '../entity/AcDbArc'
 import { AcDbAttribute } from '../entity/AcDbAttribute'
@@ -41,7 +42,7 @@ import { acdbDxfInPolyline } from './AcDbDxfPolylineAssembler'
  * Returns null for unsupported types (caller should skip to next code 0).
  */
 export function acdbCreateEntityForDxfIn(typeName: string): AcDbEntity | null {
-  const type = typeName.toUpperCase()
+  const type = acdbDxfKeywordUpper(typeName)
   switch (type) {
     case 'LINE':
       return new AcDbLine(new AcGePoint3d(), new AcGePoint3d())
@@ -152,7 +153,7 @@ export function acdbDxfInEntity(
     name = String(item.value)
   }
 
-  const upper = name.toUpperCase()
+  const upper = acdbDxfKeywordUpper(name)
   // Composite / subclass-dispatched types — not created via empty factory.
   if (upper === 'POLYLINE') {
     return acdbDxfInPolyline(filer)

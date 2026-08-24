@@ -111,6 +111,7 @@ import {
   exportIcon,
   hatch,
   importIcon,
+  invertSelection,
   layer,
   layerCurrent,
   layerFreeze,
@@ -939,6 +940,7 @@ const buildBaseTabs = (
     redo: t('main.ribbon.tooltip.redo'),
     properties: t('main.ribbon.tooltip.properties'),
     quickSelect: t('main.ribbon.tooltip.quickSelect'),
+    invertSelection: t('main.ribbon.tooltip.invertSelection'),
     countList: t('main.ribbon.tooltip.countList'),
     drawingUnits: t('main.ribbon.tooltip.drawingUnits'),
     attachDwg: t('main.ribbon.tooltip.attachDwg'),
@@ -2033,6 +2035,18 @@ const buildBaseTabs = (
                   }
                 },
                 {
+                  id: 'cmd-invertsel',
+                  type: 'button',
+                  label: t('main.ribbon.command.invertSelection'),
+                  tooltip: ribbonTooltips.invertSelection,
+                  size: 'large',
+                  props: {
+                    icon: invertSelection,
+                    labelWrapLines: 2,
+                    labelWrapWidth: 'max-content'
+                  }
+                },
+                {
                   id: 'cmd-countlist',
                   type: 'button',
                   label: t('main.ribbon.command.countList'),
@@ -2261,6 +2275,7 @@ const ribbonData = computed(() => {
   commandByItemId.set('cmd-layer', 'layer')
   commandByItemId.set('cmd-properties', 'properties')
   commandByItemId.set('cmd-qselect', 'qselect')
+  commandByItemId.set('cmd-invertsel', 'invertsel')
   commandByItemId.set('cmd-countlist', 'countlist')
   commandByItemId.set('cmd-drawing-units', 'units')
   commandByItemId.set('cmd-xattach', 'xattach')

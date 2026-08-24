@@ -19,6 +19,7 @@ import {
   AcApDrawingUnitsCmd,
   AcApExportHtmlDlgCmd,
   AcApInsertPaletteCmd,
+  AcApInvertSelCmd,
   AcApLayerStateCmd,
   AcApMarkupPanelCmd,
   AcApMemCmd,
@@ -84,6 +85,12 @@ export const registerCmds = () => {
       'qselect',
       'qselect',
       new AcApQSelectCmd()
+    )
+    register.addCommand(
+      AcEdCommandStack.SYSTEMT_COMMAND_GROUP_NAME,
+      'invertsel',
+      'invertsel',
+      new AcApInvertSelCmd()
     )
     register.addCommand(
       AcEdCommandStack.SYSTEMT_COMMAND_GROUP_NAME,

@@ -295,6 +295,8 @@ export default {
       properties: 'Otevře paletu Vlastnosti pro aktuální výběr.',
       quickSelect:
         'Otevře Rychlý výběr pro filtrování a výběr objektů podle kritérií.',
+      invertSelection:
+        'Obrátí aktuální výběr: vybrané objekty se zruší a všechny ostatní se vyberou (Ctrl+Shift+I).',
       countList: 'Otevře paletu Počet pro zobrazení a správu počtu bloků.',
       missingResources:
         'Otevře paletu Chybějící / externí zdroje pro fonty, obrázky a externí reference.',
@@ -405,6 +407,7 @@ export default {
       redo: 'Znovu',
       properties: 'Vlastnosti',
       quickSelect: 'Rychlý\nvýběr',
+      invertSelection: 'Obrátit\nvýběr',
       countList: 'Počet',
       drawingUnits: 'Jednotky\nvýkresu',
       attachDwg: 'Připojit\nDWG',

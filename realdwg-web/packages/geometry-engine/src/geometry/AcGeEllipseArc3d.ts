@@ -376,6 +376,51 @@ export class AcGeEllipseArc3d extends AcGeCurve3d {
   }
 
   /**
+   * Densify this ellipse arc into an interleaved xyz `Float64Array` without
+   * allocating per-point objects. Mirrors {@link getPoints} exactly (same
+   * angles, same point formula as {@link getPointAtAngle}).
+   * @param numPoints - Segment count; the result holds `numPoints + 1` points.
+   * @param out - Optional buffer (at least `(numPoints + 1) * 3` long).
+   * @returns The filled `out` or a newly allocated array.
+   */
+  getPointsFlat(numPoints: number = 100, out?: Float64Array): Float64Array {
+    const result = out ?? new Float64Array((numPoints + 1) * 3)
+    let deltaAngle = this.deltaAngle
+    let startAngle = this.startAngle
+    if (this.closed) {
+      deltaAngle = TAU
+      startAngle = 0
+    }
+    // minorAxis allocates a fresh cross-product vector per access; read the
+    // axes once instead of per point (getPointAtAngle clones them per point).
+    const majX = this.majorAxis.x
+    const majY = this.majorAxis.y
+    const majZ = this.majorAxis.z
+    const minX = this.minorAxis.x
+    const minY = this.minorAxis.y
+    const minZ = this.minorAxis.z
+    const majR = this.majorAxisRadius
+    const minR = this.minorAxisRadius
+    const cx = this.center.x
+    const cy = this.center.y
+    const cz = this.center.z
+    for (let i = 0, pos = 0; i <= numPoints; i++) {
+      const angle = startAngle + deltaAngle * (i / numPoints)
+      const cosTheta = Math.cos(angle)
+      const sinTheta = Math.sin(angle)
+      // Match getPointAtAngle's association: scaled axes are summed first,
+      // then added to the center (add() runs before center addition).
+      const px = majX * (cosTheta * majR) + (minX * minR) * sinTheta
+      const py = majY * (cosTheta * majR) + (minY * minR) * sinTheta
+      const pz = majZ * (cosTheta * majR) + (minZ * minR) * sinTheta
+      result[pos++] = cx + px
+      result[pos++] = cy + py
+      result[pos++] = cz + pz
+    }
+    return result
+  }
+
+  /**
    * Calculate a point on the ellipse at a given angle.
    * @param angle Input the angle in radians where the point is to be calculated.
    * @returns Return the 3d coordinates of the point on the ellipse.

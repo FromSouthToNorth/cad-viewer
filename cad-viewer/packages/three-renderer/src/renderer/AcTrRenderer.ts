@@ -78,8 +78,11 @@ export type AcTrDirectCapturePayload =
   | {
       /** Connected polyline captured from a line-strip draw. */
       kind: 'lineStrip'
-      /** World-space vertices along the strip (at least two when captured). */
-      points: AcGePoint3dLike[]
+      /**
+       * World-space vertices along the strip (at least two when captured).
+       * `Float64Array` is interleaved xyz from flat arc/ellipse densification.
+       */
+      points: AcGePoint3dLike[] | Float64Array
     }
   | {
       /** Single point primitive captured from {@link AcTrRenderer.point}. */
@@ -508,14 +511,14 @@ export class AcTrRenderer implements AcGiRenderer<AcTrEntity> {
    * @inheritdoc
    */
   circularArc(arc: AcGeCircArc3d) {
-    return this.linePoints(arc.getPoints(100))
+    return this.linePoints(arc.getPointsFlat(100))
   }
 
   /**
    * @inheritdoc
    */
   ellipticalArc(ellipseArc: AcGeEllipseArc3d) {
-    return this.linePoints(ellipseArc.getPoints(100))
+    return this.linePoints(ellipseArc.getPointsFlat(100))
   }
 
   /**
@@ -649,7 +652,7 @@ export class AcTrRenderer implements AcGiRenderer<AcTrEntity> {
     FontManager.instance.missedFonts = {}
   }
 
-  private linePoints(points: AcGePoint3dLike[]) {
+  private linePoints(points: AcGePoint3dLike[] | Float64Array) {
     if (this._directCapture !== 'off') {
       if (points.length < 2) {
         this.missDirectCapture()

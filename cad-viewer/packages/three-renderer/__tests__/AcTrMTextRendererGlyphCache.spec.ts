@@ -182,4 +182,54 @@ describe('AcTrMTextRenderer content-level glyph cache', () => {
     await renderer.asyncRenderMText(content, style)
     expect(mockAsyncRenderMText).toHaveBeenCalledTimes(3)
   })
+
+  it('coalesces concurrent same-key requests into one worker round trip', async () => {
+    const renderer = AcTrMTextRenderer.getInstance()
+    renderer.initialize('worker.js')
+
+    // Issued without awaiting: the second call must join the first one's
+    // in-flight render instead of posting its own layout request.
+    const first = renderer.asyncRenderMText(
+      createContent('burst-label', { x: 0, y: 0, z: 0 }),
+      style
+    )
+    const second = renderer.asyncRenderMText(
+      createContent('burst-label', { x: 10, y: 20, z: 0 }),
+      style
+    )
+    const [a, b] = await Promise.all([first, second])
+
+    expect(mockAsyncRenderMText).toHaveBeenCalledTimes(1)
+    expect(a.position.x).toBe(0)
+    expect(b.position.x).toBe(10)
+    expect(renderer.getContentGlyphCacheStats().count).toBe(1)
+
+    // A later sequential call is served from the cache without a new render.
+    const third = await renderer.asyncRenderMText(
+      createContent('burst-label', { x: 99, y: 0, z: 0 }),
+      style
+    )
+    expect(mockAsyncRenderMText).toHaveBeenCalledTimes(1)
+    expect(third.position.x).toBe(99)
+  })
+
+  it('cleans up in-flight state when a shared render rejects', async () => {
+    const renderer = AcTrMTextRenderer.getInstance()
+    renderer.initialize('worker.js')
+    mockAsyncRenderMText.mockRejectedValueOnce(new Error('layout failed'))
+
+    const first = renderer.asyncRenderMText(createContent('fail-label'), style)
+    const second = renderer.asyncRenderMText(createContent('fail-label'), style)
+    await expect(first).rejects.toThrow('layout failed')
+    await expect(second).rejects.toThrow('layout failed')
+
+    // The next request starts a fresh render (no stale in-flight entry).
+    const recovered = await renderer.asyncRenderMText(
+      createContent('fail-label'),
+      style
+    )
+    expect(recovered).toBeDefined()
+    expect(mockAsyncRenderMText).toHaveBeenCalledTimes(2)
+    expect(renderer.getContentGlyphCacheStats().count).toBe(0)
+  })
 })

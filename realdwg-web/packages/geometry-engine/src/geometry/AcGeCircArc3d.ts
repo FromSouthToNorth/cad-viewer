@@ -525,6 +525,44 @@ export class AcGeCircArc3d extends AcGeCurve3d {
   }
 
   /**
+   * Densify this arc into an interleaved xyz `Float64Array` without
+   * allocating per-point objects. Mirrors {@link getPoints} exactly (same
+   * angles, same point formula as {@link getPointAtAngle}).
+   * @param numPoints - Segment count; the result holds `numPoints + 1` points.
+   * @param out - Optional buffer (at least `(numPoints + 1) * 3` long).
+   * @returns The filled `out` or a newly allocated array.
+   */
+  getPointsFlat(numPoints: number, out?: Float64Array): Float64Array {
+    const result = out ?? new Float64Array((numPoints + 1) * 3)
+    let deltaAngle = this.deltaAngle
+    let startAngle = this.startAngle
+    if (this.closed) {
+      deltaAngle = TAU
+      startAngle = 0
+    }
+    // Orthogonal vector to refVec in the plane of the arc, computed once
+    // (getPointAtAngle recomputes it per point).
+    const n = this.normal
+    const r = this.refVec
+    const orthX = n.y * r.z - n.z * r.y
+    const orthY = n.z * r.x - n.x * r.z
+    const orthZ = n.x * r.y - n.y * r.x
+    const cx = this.center.x
+    const cy = this.center.y
+    const cz = this.center.z
+    const radius = this.radius
+    for (let i = 0, pos = 0; i <= numPoints; i++) {
+      const angle = startAngle + deltaAngle * (i / numPoints)
+      const cos = Math.cos(angle)
+      const sin = Math.sin(angle)
+      result[pos++] = cx + radius * (r.x * cos + orthX * sin)
+      result[pos++] = cy + radius * (r.y * cos + orthY * sin)
+      result[pos++] = cz + radius * (r.z * cos + orthZ * sin)
+    }
+    return result
+  }
+
+  /**
    * @inheritdoc
    */
   transform(matrix: AcGeMatrix3d) {
