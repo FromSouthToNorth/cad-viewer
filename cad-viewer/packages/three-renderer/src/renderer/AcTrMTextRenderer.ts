@@ -74,6 +74,16 @@ export class AcTrMTextRenderer {
    * the deep-clone cost of a cached template.
    */
   private _pendingGlyphKeys = new Map<string, number>()
+  /**
+   * In-flight async glyph renders keyed by cache key. Concurrent requests for
+   * the same content (the common burst pattern during document open) share
+   * one worker round trip; late joiners await the shared render and receive
+   * positioned clones instead of each posting a layout request.
+   */
+  private _inFlightGlyphRenders = new Map<
+    string,
+    { promise: Promise<MTextObject>; joined: boolean }
+  >()
   /** Feature switch for the content-level glyph cache (default on). */
   private _contentGlyphCacheEnabled = true
   /** Font-loaded listener installed by {@link installFontLoadedInvalidation}. */
@@ -190,12 +200,36 @@ export class AcTrMTextRenderer {
       return clonePlacedMTextTemplate(template, mtextContent.position)
     }
 
-    const mtext = await this._renderer.asyncRenderMText(
+    const inFlight = this._inFlightGlyphRenders.get(key)
+    if (inFlight) {
+      // A layout for this content is already underway: share its round trip.
+      inFlight.joined = true
+      const rendered = await inFlight.promise
+      return clonePlacedMTextTemplate(rendered, mtextContent.position)
+    }
+
+    const promise = this._renderer.asyncRenderMText(
       mtextContent,
       textStyle,
       colorSettings
     )
-    return this.recordGlyphRender(key, mtext, mtextContent.position)
+    const entry = { promise, joined: false }
+    this._inFlightGlyphRenders.set(key, entry)
+    try {
+      const rendered = await promise
+      const occurrences = (this._pendingGlyphKeys.get(key) ?? 0) + 1
+      if (entry.joined || occurrences > 1) {
+        this._pendingGlyphKeys.delete(key)
+        cache.set(key, rendered)
+        return clonePlacedMTextTemplate(rendered, mtextContent.position)
+      }
+      this._pendingGlyphKeys.set(key, 1)
+      return rendered
+    } finally {
+      if (this._inFlightGlyphRenders.get(key) === entry) {
+        this._inFlightGlyphRenders.delete(key)
+      }
+    }
   }
 
   /**
@@ -435,6 +469,9 @@ export class AcTrMTextRenderer {
   private invalidateGlyphCache() {
     this._glyphCache?.clear()
     this._pendingGlyphKeys.clear()
+    // In-flight renders were started against fallback fonts; let new callers
+    // start fresh layouts once the real font arrives.
+    this._inFlightGlyphRenders.clear()
   }
 
   /**

@@ -1,0 +1,184 @@
+{
+  "generatedAt": "2026-08-24T06:25:05.098Z",
+  "scenario": "all",
+  "results": {
+    "m41": {
+      "duplicate": {
+        "workerPosts": 37,
+        "workersCreated": 4,
+        "cacheStats": {
+          "count": 0,
+          "estimatedBytes": 0
+        },
+        "profile": {
+          "totalMs": 19222,
+          "readMs": 525,
+          "parseMs": 199,
+          "entityMs": 218,
+          "convertMs": 18697,
+          "cacheHits": 0,
+          "cacheMisses": 0
+        }
+      },
+      "unique": {
+        "workerPosts": 10036,
+        "workersCreated": 4,
+        "cacheStats": {
+          "count": 0,
+          "estimatedBytes": 0
+        },
+        "profile": {
+          "totalMs": 43994,
+          "readMs": 1321,
+          "parseMs": 608,
+          "entityMs": 661,
+          "convertMs": 42673,
+          "cacheHits": 0,
+          "cacheMisses": 0
+        }
+      },
+      "duplicate-cache-off": {
+        "workerPosts": 10036,
+        "workersCreated": 4,
+        "cacheStats": {
+          "count": 0,
+          "estimatedBytes": 0
+        },
+        "profile": {
+          "totalMs": 17821,
+          "readMs": 569,
+          "parseMs": 245,
+          "entityMs": 289,
+          "convertMs": 17253,
+          "cacheHits": 0,
+          "cacheMisses": 0
+        }
+      }
+    },
+    "m1": {
+      "sampleCount": 215,
+      "shownValues": [
+        0,
+        11,
+        11,
+        13,
+        15,
+        16,
+        17,
+        20,
+        20,
+        22,
+        23,
+        23,
+        24,
+        25,
+        78
+      ],
+      "firstShown": 0,
+      "maxShown": 78,
+      "reached100": false,
+      "monotonic": true,
+      "hidAfterPeak": true,
+      "stageTexts": [
+        "开始解析文件...",
+        "正在解析文件 ...",
+        "正在解析图元...",
+        "正在渲染图纸 ..."
+      ]
+    },
+    "m24": {
+      "error": "Error: timeout waiting for: () => window.__OPENPROF_DONE__ === true\n    at waitFor (file:///F:/gis/bw-cad-view/cad-viewer/packages/cad-simple-viewer-example/tools/openprof-run.mjs:203:13)\n    at runNextTicks (node:internal/process/task_queues:65:5)\n    at process.processImmediate (node:internal/timers:502:9)\n    at async openAndWaitProfile (file:///F:/gis/bw-cad-view/cad-viewer/packages/cad-simple-viewer-example/tools/openprof-run.mjs:218:3)\n    at async Promise.all (index 1)\n    at async Object.scenarioM24 [as m24] (file:///F:/gis/bw-cad-view/cad-viewer/packages/cad-simple-viewer-example/tools/openprof-run.mjs:373:34)\n    at async file:///F:/gis/bw-cad-view/cad-viewer/packages/cad-simple-viewer-example/tools/openprof-run.mjs:517:30"
+    },
+    "m3": {
+      "layers": [],
+      "rendererInfo": {
+        "calls": 0,
+        "triangles": 0,
+        "points": 0,
+        "lines": 0,
+        "geometries": 0,
+        "textures": 0,
+        "programs": 0
+      },
+      "uploadsAtIdle": {
+        "bufferDataBytes": 0,
+        "bufferDataCalls": 0,
+        "bufferSubDataBytes": 0,
+        "bufferSubDataCalls": 0,
+        "texImageBytes": 28,
+        "texImageCalls": 7,
+        "texSubImageBytes": 0,
+        "texSubImageCalls": 0
+      },
+      "turnOff": {
+        "bufferDataBytes": 0,
+        "bufferDataCalls": 0,
+        "bufferSubDataBytes": 0,
+        "bufferSubDataCalls": 0,
+        "texImageBytes": 0,
+        "texImageCalls": 0,
+        "texSubImageBytes": 0,
+        "texSubImageCalls": 0
+      },
+      "turnOn": {
+        "bufferDataBytes": 0,
+        "bufferDataCalls": 0,
+        "bufferSubDataBytes": 0,
+        "bufferSubDataCalls": 0,
+        "texImageBytes": 0,
+        "texImageCalls": 0,
+        "texSubImageBytes": 0,
+        "texSubImageCalls": 0
+      }
+    },
+    "m42": {
+      "selectionLogs": [
+        "[cad-selection] box=[-1000000000, -1000000000, 1000000000, 1000000000] mode=crossing action=replace hits=0 searchMs=0.00",
+        "[cad-selection] action=replace changed=0 total=0 ms=0.10 ids=[]",
+        "[cad-selection] box=[-2000000000, -2000000000, -1900000000, -1900000000] mode=crossing action=replace hits=0 searchMs=0.00",
+        "[cad-selection] action=replace changed=0 total=0 ms=0.00 ids=[]"
+      ],
+      "fullBoxMs": 0.5,
+      "fullBoxUploads": {
+        "bufferDataBytes": 0,
+        "bufferDataCalls": 0,
+        "bufferSubDataBytes": 0,
+        "bufferSubDataCalls": 0,
+        "texImageBytes": 28,
+        "texImageCalls": 7,
+        "texSubImageBytes": 0,
+        "texSubImageCalls": 0
+      },
+      "emptyBoxMs": 0.10000002384185791,
+      "emptyBoxUploads": {
+        "bufferDataBytes": 0,
+        "bufferDataCalls": 0,
+        "bufferSubDataBytes": 0,
+        "bufferSubDataCalls": 0,
+        "texImageBytes": 0,
+        "texImageCalls": 0,
+        "texSubImageBytes": 0,
+        "texSubImageCalls": 0
+      }
+    },
+    "m53": {
+      "wallMs": 2866.5,
+      "entityStats": {
+        "modelSpace": 50000,
+        "paperLike": 0,
+        "blocks": 2,
+        "blockEntities": 50009
+      },
+      "profile": {
+        "totalMs": 2867,
+        "readMs": 2866,
+        "parseMs": 510,
+        "entityMs": 2123,
+        "convertMs": 1,
+        "cacheHits": 49999,
+        "cacheMisses": 1
+      },
+      "report": "\n========== OPENPROF (open-file profile) ==========\nNote: progress-bar % weights (PARSE~12%, ENTITY~98%) are not wall-time shares.\nStage ms = active-stage wall time (first event of stage → first event of next stage).\nprogressive:          off (mid-open paints=0, yields=0)\nwall clock total:     2867 ms\n  db.read:            2866 ms  (100.0%)\n    PARSE:            510 ms  (17.8% of read)\n    ENTITY flush:     2123 ms  (74.1% of read)\n  scene convert:      1 ms  (0.0%)\n\n--- AcDbRenderingCache (top-level INSERT draws) ---\nhits:   49999, hit path 482 ms (clone 447 ms)\nmisses: 1, build 4 ms (incl. nested), compact 2 ms, set/clone 1 ms\napplyMatrix+attribs: 102 ms\n\n--- AcDbRenderingCache (all depths: hits=49999, misses=1) ---\nhit 482 ms (clone 447), build 4, compact 2, set 1, apply 102\n\n--- Slowest block template misses (build+compact) ---\nBOLT                                     build=      4ms  compact=      0ms  total=      4ms\n==================================================\n"
+    }
+  }
+}
