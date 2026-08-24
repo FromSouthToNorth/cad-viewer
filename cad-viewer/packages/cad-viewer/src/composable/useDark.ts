@@ -41,7 +41,11 @@ function applyThemeCanvasBackground(
   if (!database) return
 
   const background = new AcCmColor(AcCmColorMethod.ByColor)
-  background.setRGB(...(theme === 'dark' ? [0, 0, 0] : [255, 255, 255]))
+  if (theme === 'dark') {
+    background.setRGB(0, 0, 0)
+  } else {
+    background.setRGB(255, 255, 255)
+  }
   AcDbSysVarManager.instance().setVar(
     AcDbSystemVariables.MODELBKCOLOR,
     background,
