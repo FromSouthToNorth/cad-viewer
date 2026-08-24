@@ -1,4 +1,9 @@
-import { AcGePoint3d } from '@mlightcad/data-model'
+import {
+  AcGeCircArc3d,
+  AcGeEllipseArc3d,
+  AcGePoint3d,
+  AcGeVector3d
+} from '@mlightcad/data-model'
 import * as THREE from 'three'
 
 import { AcTrRenderer } from '../src/renderer/AcTrRenderer'
@@ -97,5 +102,54 @@ describe('AcTrRenderer direct capture', () => {
     renderer.beginDirectCapture()
     renderer.mtext({} as never, {} as never)
     expect(renderer.takeDirectCapture()).toBeNull()
+  })
+
+  it('captures circularArc as a flat Float64Array lineStrip payload', () => {
+    const renderer = createRenderer()
+    const arc = new AcGeCircArc3d(
+      new AcGePoint3d(0, 0, 0),
+      10,
+      0,
+      Math.PI * 2,
+      AcGeVector3d.Z_AXIS,
+      AcGeVector3d.X_AXIS
+    )
+
+    renderer.beginDirectCapture()
+    const placeholder = renderer.circularArc(arc)
+    expect(placeholder.children).toHaveLength(0)
+
+    const payload = renderer.takeDirectCapture()
+    expect(payload?.kind).toBe('lineStrip')
+    if (payload?.kind === 'lineStrip') {
+      expect(payload.points).toBeInstanceOf(Float64Array)
+      expect(payload.points.length).toBe(101 * 3)
+      expect(payload.points[0]!).toBe(arc.getPoints(100)[0]!.x)
+      expect(payload.points[2]!).toBe(arc.getPoints(100)[0]!.z)
+    }
+  })
+
+  it('captures ellipticalArc as a flat Float64Array lineStrip payload', () => {
+    const renderer = createRenderer()
+    const ellipse = new AcGeEllipseArc3d(
+      new AcGePoint3d(0, 0, 0),
+      AcGeVector3d.Z_AXIS,
+      AcGeVector3d.X_AXIS,
+      8,
+      4,
+      0,
+      Math.PI * 2
+    )
+
+    renderer.beginDirectCapture()
+    const placeholder = renderer.ellipticalArc(ellipse)
+    expect(placeholder.children).toHaveLength(0)
+
+    const payload = renderer.takeDirectCapture()
+    expect(payload?.kind).toBe('lineStrip')
+    if (payload?.kind === 'lineStrip') {
+      expect(payload.points).toBeInstanceOf(Float64Array)
+      expect(payload.points.length).toBe(101 * 3)
+    }
   })
 })

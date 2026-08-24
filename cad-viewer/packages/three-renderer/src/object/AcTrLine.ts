@@ -15,7 +15,7 @@ export class AcTrLine extends AcTrEntity {
   public geometry: THREE.BufferGeometry | LineSegmentsGeometry
 
   constructor(
-    points: AcGePoint3dLike[],
+    points: AcGePoint3dLike[] | Float64Array,
     traits: AcGiSubEntityTraits,
     context: AcTrRenderContext,
     basicMaterialOnly: boolean = false

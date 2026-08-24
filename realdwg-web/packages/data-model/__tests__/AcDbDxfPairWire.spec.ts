@@ -227,6 +227,50 @@ describe('AcDbDxfPairWire', () => {
     expectSamePairStream(replayed, direct)
   })
 
+  it('keeps small capacity slack as a zero-copy view', () => {
+    // 200 LINEs × 6 pairs + 4 section pairs = 1204 pairs.
+    const parts = ['0', 'SECTION', '2', 'ENTITIES']
+    for (let i = 0; i < 200; i++) {
+      parts.push('0', 'LINE', '8', 'L', '10', '1', '20', '2', '11', '3', '21', '4')
+    }
+    parts.push('0', 'ENDSEC', '0', 'EOF', '')
+    const bytes = new TextEncoder().encode(parts.join('\n')).buffer
+    const direct = readAll(acdbCreateDxfPairReader(bytes))
+    expect(direct.length).toBe(1204)
+
+    // estimated = ceil(1204*12*1.1 / 12) = 1325 → slack ratio 1.10 ≤ 1.25:
+    // the array must stay a view over the (larger) backing buffer.
+    const wire = acdbDrainDxfPairs(acdbCreateDxfPairReader(bytes), {
+      totalBytes: Math.ceil(1204 * 12 * 1.1)
+    })
+    expect(wire.codes.length).toBe(1204)
+    expect(wire.codes.buffer.byteLength).toBeGreaterThan(1204 * 4)
+
+    const replayed = readAll(acdbMakeDxfPairArrayReader(wire))
+    expectSamePairStream(replayed, direct)
+  })
+
+  it('trims substantially oversized capacity to exact size', () => {
+    const parts = ['0', 'SECTION', '2', 'ENTITIES']
+    for (let i = 0; i < 200; i++) {
+      parts.push('0', 'LINE', '8', 'L', '10', '1', '20', '2', '11', '3', '21', '4')
+    }
+    parts.push('0', 'ENDSEC', '0', 'EOF', '')
+    const bytes = new TextEncoder().encode(parts.join('\n')).buffer
+    const direct = readAll(acdbCreateDxfPairReader(bytes))
+    expect(direct.length).toBe(1204)
+
+    // estimated = 2408 → slack ratio 2.0 > 1.25: copied down to exact size.
+    const wire = acdbDrainDxfPairs(acdbCreateDxfPairReader(bytes), {
+      totalBytes: 1204 * 12 * 2
+    })
+    expect(wire.codes.length).toBe(1204)
+    expect(wire.codes.buffer.byteLength).toBe(1204 * 4)
+
+    const replayed = readAll(acdbMakeDxfPairArrayReader(wire))
+    expectSamePairStream(replayed, direct)
+  })
+
   it('round-trips bigint long values and binary chunks', () => {
     // Hand-built binary DXF: magic + a few pairs incl. int64 > 2^53 and 310.
     const magic = new TextEncoder().encode('AutoCAD Binary DXF\r\n')

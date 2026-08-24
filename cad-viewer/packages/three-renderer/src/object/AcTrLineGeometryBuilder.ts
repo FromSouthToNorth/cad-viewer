@@ -581,9 +581,12 @@ export function splitPointRuns(points: AcGePoint3dLike[]): AcGePoint3dLike[][] {
  *   than two points are provided.
  */
 export function buildLineGeometryMulti(
-  points: AcGePoint3dLike[],
+  points: AcGePoint3dLike[] | Float64Array,
   material: THREE.Material
 ): AcTrBuiltLineGeometry[] {
+  if (points instanceof Float64Array) {
+    return buildFlatLineGeometryMulti(points, material)
+  }
   if (points.length < 2) {
     return []
   }
@@ -596,6 +599,123 @@ export function buildLineGeometryMulti(
     }
   }
   return results
+}
+
+/**
+ * True when the flat strip would require long-step subdivision or rebase run
+ * splitting in the object pipeline (mirrors {@link subdivideLongSteps} and
+ * {@link splitPointRuns} thresholds).
+ */
+function flatNeedsSubdivideOrSplit(flat: Float64Array): boolean {
+  const vertexCount = flat.length / 3
+  let minX = flat[0]!
+  let maxX = flat[0]!
+  let minY = flat[1]!
+  let maxY = flat[1]!
+  let minZ = flat[2]!
+  let maxZ = flat[2]!
+  for (let i = 1; i < vertexCount; i++) {
+    const i3 = i * 3
+    const x = flat[i3]!
+    const y = flat[i3 + 1]!
+    const z = flat[i3 + 2]!
+    const step = Math.max(
+      Math.abs(x - flat[i3 - 3]!),
+      Math.abs(y - flat[i3 - 2]!),
+      Math.abs(z - flat[i3 - 1]!)
+    )
+    if (step > MAX_VERTEX_STEP) {
+      return true
+    }
+    if (x < minX) minX = x
+    if (x > maxX) maxX = x
+    if (y < minY) minY = y
+    if (y > maxY) maxY = y
+    if (z < minZ) minZ = z
+    if (z > maxZ) maxZ = z
+  }
+  return (
+    Math.max(maxX - minX, maxY - minY, maxZ - minZ) > LINE_REBASE_SPLIT_EXTENT
+  )
+}
+
+/**
+ * Builds rebased line geometry from interleaved xyz `Float64Array` vertices
+ * without materializing per-point objects (arc/ellipse densification path).
+ *
+ * Behavior mirrors {@link buildLineGeometryMulti} for the common case of a
+ * single precision-safe run: same bbox-center rebase, same indexed (or fat
+ * segment) layout. Strips needing long-step subdivision or rebase splitting
+ * (huge-coordinate arcs) fall back to the object pipeline so the rare path
+ * keeps identical output.
+ */
+export function buildFlatLineGeometryMulti(
+  flat: Float64Array,
+  material: THREE.Material
+): AcTrBuiltLineGeometry[] {
+  const vertexCount = flat.length / 3
+  if (vertexCount < 2) {
+    return []
+  }
+  if (flatNeedsSubdivideOrSplit(flat)) {
+    // Rare: radii/coordinates beyond the precision-safe extents. Reuse the
+    // object pipeline for identical subdivision + run-splitting behavior.
+    const points: AcGePoint3dLike[] = new Array(vertexCount)
+    for (let i = 0; i < vertexCount; i++) {
+      const i3 = i * 3
+      points[i] = { x: flat[i3]!, y: flat[i3 + 1]!, z: flat[i3 + 2]! }
+    }
+    return buildLineGeometryMulti(points, material)
+  }
+
+  const box = new THREE.Box3()
+  for (let i = 0; i < vertexCount; i++) {
+    const i3 = i * 3
+    box.expandByPoint(_point.set(flat[i3]!, flat[i3 + 1]!, flat[i3 + 2]!))
+  }
+  const worldOffset = box.getCenter(new THREE.Vector3())
+
+  if (material instanceof LineMaterial) {
+    const segmentPositions = new Float32Array((vertexCount - 1) * 6)
+    for (let i = 0, pos = 0; i < vertexCount - 1; i++) {
+      const i3 = i * 3
+      segmentPositions[pos++] = flat[i3]! - worldOffset.x
+      segmentPositions[pos++] = flat[i3 + 1]! - worldOffset.y
+      segmentPositions[pos++] = flat[i3 + 2]! - worldOffset.z
+      segmentPositions[pos++] = flat[i3 + 3]! - worldOffset.x
+      segmentPositions[pos++] = flat[i3 + 4]! - worldOffset.y
+      segmentPositions[pos++] = flat[i3 + 5]! - worldOffset.z
+    }
+    const geometry = new LineSegmentsGeometry()
+    geometry.setPositions(segmentPositions)
+    AcTrBufferGeometryUtil.safeComputeBoundingBox(
+      geometry as unknown as THREE.BufferGeometry
+    )
+    AcTrBufferGeometryUtil.safeComputeBoundingSphere(
+      geometry as unknown as THREE.BufferGeometry
+    )
+    return [{ kind: 'fat', geometry, worldOffset, wcsBbox: box, material }]
+  }
+
+  const vertices = new Float32Array(vertexCount * 3)
+  const indices =
+    vertexCount * 2 > 65535
+      ? new Uint32Array(vertexCount * 2)
+      : new Uint16Array(vertexCount * 2)
+  for (let i = 0, pos = 0; i < vertexCount; i++) {
+    const i3 = i * 3
+    vertices[pos++] = flat[i3]! - worldOffset.x
+    vertices[pos++] = flat[i3 + 1]! - worldOffset.y
+    vertices[pos++] = flat[i3 + 2]! - worldOffset.z
+  }
+  for (let i = 0, pos = 0; i < vertexCount - 1; i++) {
+    indices[pos++] = i
+    indices[pos++] = i + 1
+  }
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3))
+  geometry.setIndex(new THREE.BufferAttribute(indices, 1))
+  return [{ kind: 'basic', geometry, worldOffset, wcsBbox: box, material }]
 }
 
 /** One cluster of subdivided, precision-safe line segments. */

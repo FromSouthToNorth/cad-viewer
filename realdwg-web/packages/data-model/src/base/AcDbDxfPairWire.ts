@@ -94,6 +94,25 @@ function growF64(arr: Float64Array, needed: number): Float64Array {
 }
 
 /**
+ * Shrinks a drained array to its used length without copying when the
+ * unused slack is small. The arrays cross `postMessage` as their full
+ * backing buffer anyway (see {@link acdbDxfPairWireTransferables}), so an
+ * exact-size copy is pure peak-memory overhead unless the overshoot is
+ * substantial.
+ */
+const MAX_TRIM_SLACK_RATIO = 1.25
+
+function trimToCount<T extends Int32Array | Uint8Array | Float64Array>(
+  arr: T,
+  count: number
+): T {
+  if (arr.length <= count * MAX_TRIM_SLACK_RATIO) {
+    return arr.subarray(0, count) as T
+  }
+  return arr.slice(0, count) as T
+}
+
+/**
  * Drains a streaming {@link AcDbDxfPairReader} into transferable
  * {@link AcDbDxfPairWireData}. Runs inside the parser worker; the result is
  * meant to be posted back with {@link acdbDxfPairWireTransferables}.
@@ -183,12 +202,12 @@ export function acdbDrainDxfPairs(
   return {
     kind: reader.kind,
     count,
-    codes: codes.slice(0, count),
-    types: types.slice(0, count),
-    numbers: numbers.slice(0, numberCount),
+    codes: trimToCount(codes, count),
+    types: trimToCount(types, count),
+    numbers: trimToCount(numbers, numberCount),
     longs,
     strings,
-    stringIndices: stringIndices.slice(0, stringValueCount),
+    stringIndices: trimToCount(stringIndices, stringValueCount),
     binaries
   }
 }
