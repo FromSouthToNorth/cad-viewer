@@ -1,5 +1,7 @@
 import { AcApDocManager } from '@mlightcad/cad-simple-viewer'
 import {
+  AcCmColor,
+  AcCmColorMethod,
   type AcDbColorTheme,
   AcDbDatabase,
   AcDbSystemVariables,
@@ -25,6 +27,30 @@ function applyThemeToDom(theme: AcDbColorTheme) {
 function updateCurrentTheme(theme: AcDbColorTheme) {
   currentTheme.value = theme
   applyThemeToDom(theme)
+}
+
+/**
+ * Keeps the active drawing's model-space canvas background in step with the
+ * UI theme (black in dark theme, white in light theme). Paper space keeps
+ * its own paper-white background and is intentionally left untouched.
+ */
+function applyThemeCanvasBackground(
+  database: AcDbDatabase | null,
+  theme: AcDbColorTheme
+) {
+  if (!database) return
+
+  const background = new AcCmColor(AcCmColorMethod.ByColor)
+  if (theme === 'dark') {
+    background.setRGB(0, 0, 0)
+  } else {
+    background.setRGB(255, 255, 255)
+  }
+  AcDbSysVarManager.instance().setVar(
+    AcDbSystemVariables.MODELBKCOLOR,
+    background,
+    database
+  )
 }
 
 function getExistingDocManager(): AcApDocManager | null {
@@ -58,7 +84,9 @@ export function ensureColorThemeSync() {
     ) {
       return
     }
-    updateCurrentTheme(getColorThemeFromDatabase(args.database))
+    const theme = getColorThemeFromDatabase(args.database)
+    updateCurrentTheme(theme)
+    applyThemeCanvasBackground(args.database, theme)
   })
 
   docManager.events.documentActivated.addEventListener(args => {
@@ -76,6 +104,8 @@ export function setColorTheme(
 
   const targetDatabase = database ?? getCurrentDatabase()
   if (!targetDatabase) return
+
+  applyThemeCanvasBackground(targetDatabase, theme)
 
   if (getColorThemeFromDatabase(targetDatabase) === theme) return
   setColorThemeForDatabase(targetDatabase, theme)

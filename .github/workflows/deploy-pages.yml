@@ -61,9 +61,14 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    # github-pages 是保留环境,只能在默认分支(main)的 workflow 中使用,
+    # dev_hy 引用它会直接失败导致必需检查变红、PR 无法合并。
+    # 因此只在 main 上真正部署,其余分支以成功空操作收尾,保持检查绿色。
     steps:
-      - id: deployment
+      - name: Deploy to GitHub Pages
+        if: github.ref == 'refs/heads/main'
+        id: deployment
         uses: actions/deploy-pages@v4
+      - name: Skip pages deployment on non-default branches
+        if: github.ref != 'refs/heads/main'
+        run: echo "GitHub Pages 仅从 main 分支部署,跳过。"
