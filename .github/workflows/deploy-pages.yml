@@ -48,20 +48,15 @@ jobs:
           NODE_OPTIONS: --max-old-space-size=4096
         run: pnpm build
 
-      # copyDist.js 会把 cad-viewer/docs 复制进站点,docs 未入库,须先生成。
-      - name: Build API docs
-        working-directory: cad-viewer
-        run: pnpm docs:build
-
-      - name: Assemble examples site
-        working-directory: cad-viewer
-        run: pnpm --filter @mlightcad/cad-viewer-examples pre-serve
-
       - uses: actions/configure-pages@v5
 
+      # 站点根路径直接是简单查看器应用。改为完整查看器:
+      #   cad-viewer/packages/cad-viewer-example/dist
+      # 改回聚合落地页:恢复 docs:build + pre-serve 步骤,并改回
+      #   cad-viewer/packages/examples/public
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: cad-viewer/packages/examples/public
+          path: cad-viewer/packages/cad-simple-viewer-example/dist
 
   deploy:
     needs: build
