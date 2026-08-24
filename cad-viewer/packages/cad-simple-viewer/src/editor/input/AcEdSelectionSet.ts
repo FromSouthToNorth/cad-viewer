@@ -166,6 +166,40 @@ export class AcEdSelectionSet {
   }
 
   /**
+   * Inverts membership for the given candidate ids: ids already in the set
+   * are removed and the remaining ids are added.
+   *
+   * Fires `selectionAdded` and `selectionRemoved` for the ids whose
+   * membership changed. Only the candidates are considered; members that are
+   * not part of `candidates` are left untouched.
+   *
+   * @param candidates - Entity ids whose selection state should be flipped.
+   * @returns The ids that were added and removed, respectively.
+   */
+  invert(candidates: AcDbObjectId[]): {
+    added: AcDbObjectId[]
+    removed: AcDbObjectId[]
+  } {
+    const added: AcDbObjectId[] = []
+    const removed: AcDbObjectId[] = []
+    for (const id of candidates) {
+      if (this._ids.delete(id)) {
+        removed.push(id)
+      } else {
+        this._ids.add(id)
+        added.push(id)
+      }
+    }
+    if (added.length > 0) {
+      this.events.selectionAdded.dispatch({ ids: added })
+    }
+    if (removed.length > 0) {
+      this.events.selectionRemoved.dispatch({ ids: removed })
+    }
+    return { added, removed }
+  }
+
+  /**
    * Removes all entities from the selection.
    *
    * Fires a `selectionRemoved` event with all previously selected entity IDs.

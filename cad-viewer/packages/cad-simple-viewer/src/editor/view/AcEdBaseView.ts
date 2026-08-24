@@ -838,6 +838,28 @@ export abstract class AcEdBaseView {
   }
 
   /**
+   * Inverts the current selection across all model-space entities: selected
+   * entities become unselected and every other entity becomes selected.
+   *
+   * The candidate universe mirrors {@link AcEditor.selectAll}, i.e. every
+   * model-space entity regardless of layer state.
+   *
+   * @returns The number of entities whose selection state changed.
+   */
+  invertSelection(): number {
+    const startedAt = performance.now()
+    const ids = this.editor.selectAll().value?.ids ?? []
+    const { added, removed } = this.selectionSet.invert(ids)
+    if (removed.length > 0) {
+      this.logSelectionResult('remove', removed, startedAt)
+    }
+    if (added.length > 0) {
+      this.logSelectionResult('add', added, startedAt)
+    }
+    return added.length + removed.length
+  }
+
+  /**
    * Logs one selection mutation with the affected entity ids.
    *
    * The id list is truncated to {@link SELECTION_LOG_MAX_IDS} entries; the

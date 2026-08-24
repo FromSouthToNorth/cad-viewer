@@ -34,15 +34,30 @@ export class AcEdViewKeyHandler {
    */
   handleKeyDown(e: KeyboardEvent): boolean {
     const undoRedoShortcut = this.resolveUndoRedoShortcut(e)
+    const invertShortcut = this.resolveInvertSelectionShortcut(e)
     const ignoreEditableTarget = this.shouldIgnoreEditableTargetShortcut(e)
 
-    if (ignoreEditableTarget && !undoRedoShortcut) {
+    if (ignoreEditableTarget && !undoRedoShortcut && !invertShortcut) {
       return false
+    }
+
+    if (invertShortcut) {
+      if (
+        !this.shouldHandleViewShortcut(e) ||
+        AcEdMTextEditor.getActiveInputBox() ||
+        this.view.editor.isActive
+      ) {
+        return false
+      }
+
+      this.view.invertSelection()
+      e.preventDefault()
+      return true
     }
 
     if (undoRedoShortcut) {
       if (
-        !this.shouldHandleUndoRedoShortcut(e) ||
+        !this.shouldHandleViewShortcut(e) ||
         AcEdMTextEditor.getActiveInputBox() ||
         this.view.editor.isActive
       ) {
@@ -122,6 +137,18 @@ export class AcEdViewKeyHandler {
     return null
   }
 
+  /**
+   * Whether the event is the invert-selection shortcut.
+   *
+   * Both Ctrl+Shift+I (Windows/Linux) and Cmd+Shift+I (macOS) invert the
+   * current selection set.
+   */
+  private resolveInvertSelectionShortcut(
+    e: Pick<KeyboardEvent, 'code' | 'ctrlKey' | 'metaKey' | 'shiftKey'>
+  ): boolean {
+    return (e.ctrlKey || e.metaKey) && e.shiftKey && e.code === 'KeyI'
+  }
+
   private shouldIgnoreEditableTargetShortcut(
     e: Pick<KeyboardEvent, 'target' | 'isComposing' | 'keyCode'>
   ): boolean {
@@ -141,7 +168,7 @@ export class AcEdViewKeyHandler {
     return target?.tagName === 'INPUT'
   }
 
-  private shouldHandleUndoRedoShortcut(
+  private shouldHandleViewShortcut(
     e: Pick<KeyboardEvent, 'target' | 'isComposing' | 'keyCode'>
   ): boolean {
     if (e.isComposing || e.keyCode === 229) {

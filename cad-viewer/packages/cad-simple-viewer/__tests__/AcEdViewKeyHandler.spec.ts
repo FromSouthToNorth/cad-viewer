@@ -41,6 +41,7 @@ function createMockView(
   return {
     editor: { isActive: isEditorActive },
     selectionSet: { clear: jest.fn() },
+    invertSelection: jest.fn(),
     htmlTransientManager: {
       hasSelection: jest.fn(() => htmlSelection.hasSelection ?? false),
       deleteSelected: jest.fn(() => htmlSelection.deleted ?? false),
@@ -104,6 +105,55 @@ describe('AcEdViewKeyHandler', () => {
 
     expect(handled).toBe(false)
     expect(sendCommand).not.toHaveBeenCalled()
+  })
+
+  test('Ctrl+Shift+I inverts the current selection set', () => {
+    const view = createMockView()
+    const handler = new AcEdViewKeyHandler(view)
+    const event = keyboardEvent({
+      code: 'KeyI',
+      ctrlKey: true,
+      shiftKey: true
+    })
+
+    expect(handler.handleKeyDown(event)).toBe(true)
+    expect(view.invertSelection).toHaveBeenCalled()
+    expect(event.preventDefault).toHaveBeenCalled()
+  })
+
+  test('Cmd+Shift+I inverts the current selection set on macOS', () => {
+    const view = createMockView()
+    const handler = new AcEdViewKeyHandler(view)
+    const event = keyboardEvent({
+      code: 'KeyI',
+      metaKey: true,
+      shiftKey: true
+    })
+
+    expect(handler.handleKeyDown(event)).toBe(true)
+    expect(view.invertSelection).toHaveBeenCalled()
+  })
+
+  test('Ctrl+I without shift does not invert the selection', () => {
+    const view = createMockView()
+    const handler = new AcEdViewKeyHandler(view)
+    const event = keyboardEvent({ code: 'KeyI', ctrlKey: true })
+
+    expect(handler.handleKeyDown(event)).toBe(false)
+    expect(view.invertSelection).not.toHaveBeenCalled()
+  })
+
+  test('Ctrl+Shift+I is skipped while editor input is active', () => {
+    const view = createMockView(true)
+    const handler = new AcEdViewKeyHandler(view)
+    const event = keyboardEvent({
+      code: 'KeyI',
+      ctrlKey: true,
+      shiftKey: true
+    })
+
+    expect(handler.handleKeyDown(event)).toBe(false)
+    expect(view.invertSelection).not.toHaveBeenCalled()
   })
 
   test('Delete detaches a selected measurement overlay without dispatching erase', () => {
