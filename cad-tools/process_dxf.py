@@ -901,6 +901,10 @@ def main():
     ap.add_argument("--src", default="cad/dxf")
     ap.add_argument("--out", default="cad/dxf/processed")
     ap.add_argument("--only", default=None, help="只处理文件名包含该字符串的图纸")
+    ap.add_argument("--max-size", type=int, default=None,
+                    help="只处理小于指定大小(KB)的文件,例如 100000 表示 100MB")
+    ap.add_argument("--skip-processed", action="store_true",
+                    help="跳过输出目录中已存在同名文件的图纸")
     args = ap.parse_args()
 
     src_dir = Path(args.src)
@@ -908,6 +912,11 @@ def main():
     files = sorted(p for p in src_dir.glob("*.dxf") if p.is_file())
     if args.only:
         files = [p for p in files if args.only in p.name]
+    if args.max_size is not None:
+        max_bytes = args.max_size * 1024
+        files = [p for p in files if p.stat().st_size < max_bytes]
+    if args.skip_processed:
+        files = [p for p in files if not (out_dir / p.name).exists()]
     if not files:
         print("未找到 DXF 文件")
         return 1
