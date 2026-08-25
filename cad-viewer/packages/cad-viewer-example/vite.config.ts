@@ -49,10 +49,6 @@ export default defineConfig(({ command, mode }) => {
     )
   }
 
-  const cadToolsRoot = resolve(__dirname, '../../../cad-tools')
-  const cadLayerDir = resolve(cadToolsRoot, 'cadLayer')
-  // 将 cadLayer 目录路径注入为环境变量,供前端通过 vite 内置的 /@fs/ 前缀访问
-  const cadLayerUrlPrefix = `/@fs/${cadLayerDir.replace(/\\/g, '/')}/`
   const aliases: Alias[] = []
   const devSourcePackages = [
     'cad-svg-plugin',
@@ -171,14 +167,9 @@ export default defineConfig(({ command, mode }) => {
       fs: {
         allow: [
           resolve(__dirname, '../..'),
-          cadToolsRoot,
           ...(linkLocalUiComponents ? [LOCAL_UI_COMPONENTS_ROOT] : [])
         ]
       }
-    },
-    define: {
-      // 注入 cadLayer 目录的 /@fs/ 访问前缀,供前端加载默认图纸
-      'import.meta.env.VITE_CAD_LAYER_PREFIX': JSON.stringify(cadLayerUrlPrefix)
     },
     build: {
       outDir: 'dist',
