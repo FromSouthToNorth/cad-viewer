@@ -119,7 +119,11 @@ const initialize = () => {
 const BASE_URL = 'https://cdn.jsdelivr.net/gh/mlightcad/cad-data@main/'
 
 // 默认加载的图纸 URL(通过 vite dev server 的 /cadlayer/ 中间件提供)
-const DEFAULT_DRAWING_URL = '/cadlayer/安全监控布置图.dxf'
+// 需要完整 URL(new URL() 要求绝对路径)
+const DEFAULT_DRAWING_URL =
+  typeof window !== 'undefined'
+    ? `${window.location.origin}/cadlayer/安全监控布置图.dxf`
+    : '/cadlayer/安全监控布置图.dxf'
 
 const showViewer = computed(
   () => store.selectedFile != null || store.isNewDrawing
