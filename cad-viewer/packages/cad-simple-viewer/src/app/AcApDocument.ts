@@ -424,8 +424,10 @@ export class AcApDocument {
     try {
       // Create a new URL object
       const url = new URL(uri)
+      // Get the pathname from the URL and decode URI components (e.g. %E4%... -> 中文)
+      const decodedPathname = decodeURIComponent(url.pathname)
       // Get the pathname from the URL
-      const pathParts = url.pathname.split('/')
+      const pathParts = decodedPathname.split('/')
       // Return the last part of the pathname as the file name
       return pathParts[pathParts.length - 1] || ''
     } catch (error) {
