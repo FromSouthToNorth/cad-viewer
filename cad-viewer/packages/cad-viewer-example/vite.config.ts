@@ -181,19 +181,25 @@ export default defineConfig(({ command, mode }) => {
         '.dxf': 'application/dxf',
         '.dwg': 'application/octet-stream'
       }
+      console.log('[cad-viewer-example] cadLayerDir:', cadLayerDir)
       server.middlewares.use('/cadlayer', (req, res, next) => {
         const fileName = decodeURIComponent(req.url || '').replace(/^\/+/, '')
+        console.log('[cadlayer] request:', req.url, '-> fileName:', fileName)
         if (!fileName) {
           return next()
         }
         const filePath = join(cadLayerDir, fileName)
+        console.log('[cadlayer] filePath:', filePath)
         // 防止路径穿越
         if (!filePath.startsWith(cadLayerDir)) {
+          console.log('[cadlayer] path traversal blocked')
           return next()
         }
         if (!existsSync(filePath) || !statSync(filePath).isFile()) {
+          console.log('[cadlayer] file not found:', filePath)
           return next()
         }
+        console.log('[cadlayer] serving file:', filePath)
         const ext = extname(filePath).toLowerCase()
         const mime = MIME_TYPES[ext] || 'application/octet-stream'
         res.setHeader('Content-Type', mime)
