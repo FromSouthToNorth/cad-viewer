@@ -1,5 +1,5 @@
-import { createReadStream, existsSync, statSync } from 'fs'
-import { dirname, extname, join, resolve } from 'path'
+import { existsSync } from 'fs'
+import { dirname, resolve } from 'path'
 import { fileURLToPath } from 'url'
 import { Alias, defineConfig } from 'vite'
 import { viteStaticCopy } from 'vite-plugin-static-copy'
@@ -51,6 +51,8 @@ export default defineConfig(({ command, mode }) => {
 
   const cadToolsRoot = resolve(__dirname, '../../../cad-tools')
   const cadLayerDir = resolve(cadToolsRoot, 'cadLayer')
+  // 将 cadLayer 目录路径注入为环境变量,供前端通过 vite 内置的 /@fs/ 前缀访问
+  const cadLayerUrlPrefix = `/@fs/${cadLayerDir.replace(/\\/g, '/')}/`
   const aliases: Alias[] = []
   const devSourcePackages = [
     'cad-svg-plugin',
@@ -174,38 +176,9 @@ export default defineConfig(({ command, mode }) => {
         ]
       }
     },
-    configureServer(server) {
-      // 提供 cad-tools/cadLayer 目录的静态文件服务(用于默认加载矿图 DXF)
-      // 访问路径: /cadlayer/<filename>
-      const MIME_TYPES: Record<string, string> = {
-        '.dxf': 'application/dxf',
-        '.dwg': 'application/octet-stream'
-      }
-      console.log('[cad-viewer-example] cadLayerDir:', cadLayerDir)
-      server.middlewares.use('/cadlayer', (req, res, next) => {
-        const fileName = decodeURIComponent(req.url || '').replace(/^\/+/, '')
-        console.log('[cadlayer] request:', req.url, '-> fileName:', fileName)
-        if (!fileName) {
-          return next()
-        }
-        const filePath = join(cadLayerDir, fileName)
-        console.log('[cadlayer] filePath:', filePath)
-        // 防止路径穿越
-        if (!filePath.startsWith(cadLayerDir)) {
-          console.log('[cadlayer] path traversal blocked')
-          return next()
-        }
-        if (!existsSync(filePath) || !statSync(filePath).isFile()) {
-          console.log('[cadlayer] file not found:', filePath)
-          return next()
-        }
-        console.log('[cadlayer] serving file:', filePath)
-        const ext = extname(filePath).toLowerCase()
-        const mime = MIME_TYPES[ext] || 'application/octet-stream'
-        res.setHeader('Content-Type', mime)
-        res.setHeader('Accept-Ranges', 'bytes')
-        createReadStream(filePath).pipe(res)
-      })
+    define: {
+      // 注入 cadLayer 目录的 /@fs/ 访问前缀,供前端加载默认图纸
+      'import.meta.env.VITE_CAD_LAYER_PREFIX': JSON.stringify(cadLayerUrlPrefix)
     },
     build: {
       outDir: 'dist',
