@@ -313,17 +313,6 @@ class CadViewerApp {
     this.setupDockMenu()
     this.setupViewerToolbarMenu()
     this.updateEmptyStateVisibility()
-
-    // 自动加载默认图纸(安全监控布置图.dxf)
-    const defaultFileUrl = '/cadlayer/安全监控布置图.dxf'
-    const defaultButton = Array.from(this.predefinedButtons).find(
-      btn => btn.dataset.fileUrl === defaultFileUrl
-    )
-    if (defaultButton) {
-      defaultButton.classList.add('active')
-      this.updateFileSidebarSubtitle(defaultButton.textContent?.trim() || '')
-      void this.loadPredefinedFile(defaultFileUrl)
-    }
   }
 
   private setupDisplayMenu() {

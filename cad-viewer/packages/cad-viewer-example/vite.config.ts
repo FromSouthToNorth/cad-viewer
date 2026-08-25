@@ -1,5 +1,5 @@
-import { existsSync } from 'fs'
-import { dirname, resolve } from 'path'
+import { createReadStream, existsSync, statSync } from 'fs'
+import { dirname, extname, join, resolve } from 'path'
 import { fileURLToPath } from 'url'
 import { Alias, defineConfig } from 'vite'
 import { viteStaticCopy } from 'vite-plugin-static-copy'
@@ -48,6 +48,9 @@ export default defineConfig(({ command, mode }) => {
         'Build @mlightcad/cad-html-plugin to enable it. Opening DXF/DWG does not require this file.'
     )
   }
+
+  const cadToolsRoot = resolve(__dirname, '../../../cad-tools')
+  const cadLayerDir = resolve(cadToolsRoot, 'cadLayer')
   const aliases: Alias[] = []
   const devSourcePackages = [
     'cad-svg-plugin',
@@ -166,9 +169,37 @@ export default defineConfig(({ command, mode }) => {
       fs: {
         allow: [
           resolve(__dirname, '../..'),
+          cadToolsRoot,
           ...(linkLocalUiComponents ? [LOCAL_UI_COMPONENTS_ROOT] : [])
         ]
       }
+    },
+    configureServer(server) {
+      // 提供 cad-tools/cadLayer 目录的静态文件服务(用于默认加载矿图 DXF)
+      // 访问路径: /cadlayer/<filename>
+      const MIME_TYPES: Record<string, string> = {
+        '.dxf': 'application/dxf',
+        '.dwg': 'application/octet-stream'
+      }
+      server.middlewares.use('/cadlayer', (req, res, next) => {
+        const fileName = decodeURIComponent(req.url || '').replace(/^\/+/, '')
+        if (!fileName) {
+          return next()
+        }
+        const filePath = join(cadLayerDir, fileName)
+        // 防止路径穿越
+        if (!filePath.startsWith(cadLayerDir)) {
+          return next()
+        }
+        if (!existsSync(filePath) || !statSync(filePath).isFile()) {
+          return next()
+        }
+        const ext = extname(filePath).toLowerCase()
+        const mime = MIME_TYPES[ext] || 'application/octet-stream'
+        res.setHeader('Content-Type', mime)
+        res.setHeader('Accept-Ranges', 'bytes')
+        createReadStream(filePath).pipe(res)
+      })
     },
     build: {
       outDir: 'dist',

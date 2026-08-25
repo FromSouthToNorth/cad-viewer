@@ -21,6 +21,7 @@
     <!-- CAD viewer when a file is selected or a new drawing is created -->
     <div v-else>
       <MlCadViewer
+        :url="DEFAULT_DRAWING_URL"
         :local-file="store.selectedFile ?? undefined"
         :mode="selectedMode"
         :use-main-thread-draw="useMainThreadDraw"
@@ -117,6 +118,9 @@ const initialize = () => {
 
 const BASE_URL = 'https://cdn.jsdelivr.net/gh/mlightcad/cad-data@main/'
 
+// 默认加载的图纸 URL(通过 vite dev server 的 /cadlayer/ 中间件提供)
+const DEFAULT_DRAWING_URL = '/cadlayer/安全监控布置图.dxf'
+
 const showViewer = computed(
   () => store.selectedFile != null || store.isNewDrawing
 )
@@ -141,7 +145,8 @@ const createNewDrawing = async () => {
 
 const onViewerCreate = async () => {
   initialize()
-  if (store.isNewDrawing) {
+  // 如果提供了默认图纸 URL,不创建新空白文档(由 MlCadViewer 自动加载)
+  if (store.isNewDrawing && !DEFAULT_DRAWING_URL) {
     await nextTick()
     await createNewDrawing()
   }
