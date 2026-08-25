@@ -1,5 +1,5 @@
-import { existsSync } from 'fs'
-import { dirname, resolve } from 'path'
+import { createReadStream, existsSync, statSync } from 'fs'
+import { dirname, extname, join, resolve } from 'path'
 import { fileURLToPath } from 'url'
 import vue from '@vitejs/plugin-vue'
 import { defineConfig } from 'vite'
@@ -30,6 +30,7 @@ export default defineConfig(() => {
   }
 
   const realdwgRoot = resolve(__dirname, '../../../realdwg-web')
+  const cadToolsRoot = resolve(__dirname, '../../../cad-tools')
   const libredwgDist = `./node_modules/${LIBREDWG_CONVERTER_PACKAGE}/dist`
   const libredwgWasmSrc = resolve(
     __dirname,
@@ -39,17 +40,47 @@ export default defineConfig(() => {
     LIBREDWG_PARSER_WASM_FILE
   )
 
+  const cadLayerDir = resolve(cadToolsRoot, 'cadLayer')
+
   return {
     base: './',
     server: {
       // Local pnpm overrides point at sibling realdwg-web packages.
+      // cad-tools/cadLayer 目录包含默认加载的矿图 DXF 样本。
       fs: {
-        allow: [resolve(__dirname, '../..'), realdwgRoot]
+        allow: [resolve(__dirname, '../..'), realdwgRoot, cadToolsRoot]
       },
       watch: {
         // Avoid HMR reloads when realdwg-web rebuilds mid OPENPROF run.
         ignored: ['**/realdwg-web/**']
       }
+    },
+    configureServer(server) {
+      // 提供 cad-tools/cadLayer 目录的静态文件服务(用于默认加载矿图 DXF)
+      // 访问路径: /cadlayer/<filename>
+      const MIME_TYPES: Record<string, string> = {
+        '.dxf': 'application/dxf',
+        '.dwg': 'application/octet-stream'
+      }
+      server.middlewares.use('/cadlayer', (req, res, next) => {
+        const fileName = decodeURIComponent(req.url || '').replace(/^\/+/, '')
+        if (!fileName) {
+          return next()
+        }
+        const filePath = join(cadLayerDir, fileName)
+        // 防止路径穿越
+        if (!filePath.startsWith(cadLayerDir)) {
+          return next()
+        }
+        if (!existsSync(filePath) || !statSync(filePath).isFile()) {
+          return next()
+        }
+        const ext = extname(filePath).toLowerCase()
+        const mime = MIME_TYPES[ext] || 'application/octet-stream'
+        res.setHeader('Content-Type', mime)
+        res.setHeader('Accept-Ranges', 'bytes')
+        createReadStream(filePath).pipe(res)
+      })
     },
     build: {
       modulePreload: false,
